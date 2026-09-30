@@ -174,8 +174,11 @@ class World {
         const a = this.bodies[i], b = this.bodies[j];
         if (consumed.has(a.id) || consumed.has(b.id)) continue;
         let dx = b.x - a.x, dy = b.y - a.y;
-        let distance = Math.hypot(dx, dy);
-        if (distance >= a.r + b.r) continue;
+        const reach = a.r + b.r;
+        if (Math.abs(dx) >= reach || Math.abs(dy) >= reach) continue;
+        const squaredDistance = dx * dx + dy * dy;
+        if (squaredDistance >= reach * reach) continue;
+        let distance = Math.sqrt(squaredDistance);
         if (!a.mystery && !b.mystery && a.tier === b.tier) {
           consumed.add(a.id); consumed.add(b.id);
           const tier = a.tier + 1, points = tier * 8;
@@ -326,7 +329,28 @@ function drawWeapon(c, tier, x, y, width, angle = 0, variant = -1) {
   c.save();c.translate(x,y);c.rotate(angle);c.drawImage(weaponArt.get(key),-width/2,-width*30/140,width,width*60/140);c.restore();
 }
 
+// Rasterize shadows, rims and labels once; moving cases only copy a sprite.
+const caseArt = new Map();
 function drawCase(c, tier, x, y, radius, angle = 0, alpha = 1) {
+  const size = Math.ceil(radius / 8) * 8, key = `${tier}-${size}`;
+  let surface = caseArt.get(key);
+  if (!surface) {
+    const extent = size + 20;
+    surface = document.createElement('canvas');
+    surface.width = surface.height = extent * 4;
+    const p = surface.getContext('2d');
+    p.scale(2, 2);
+    paintCase(p, tier, extent, extent, size);
+    if (caseArt.size >= 128) caseArt.delete(caseArt.keys().next().value);
+    caseArt.set(key, surface);
+  }
+  const extent = (size + 20) * radius / size;
+  c.save(); c.globalAlpha = alpha; c.translate(x, y); c.rotate(angle);
+  c.drawImage(surface, -extent, -extent, extent * 2, extent * 2);
+  c.restore();
+}
+
+function paintCase(c, tier, x, y, radius, angle = 0, alpha = 1) {
   const w = LEVELS[tier];
   c.save(); c.globalAlpha=alpha; c.translate(x,y); c.rotate(angle);
   c.shadowColor = '#0009'; c.shadowBlur=9; c.shadowOffsetY=4;
@@ -381,6 +405,7 @@ let world, current, next, aim = 260, cooldown = 0, particles = [], floaters = []
 let sound = false, audio, started = false;
 let bursts = [], aimSample = null, flick = 0, victoryDelay = 0;
 let missionIndex = 0, missionComplete = false, discovered = new Set();
+let hudDirty = false, needsDraw = true;
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 let best = 0; try { best = Number(localStorage.getItem('case-drop-missions-best')) || 0; } catch {}
 $('best').textContent = best.toLocaleString('uk-UA');
@@ -406,7 +431,7 @@ function mysteryChanged(event) {
   $('mystery-hint').textContent=event.opened?`Усередині: ${LEVELS[event.tier].label}! +${event.points} очок`:`Замок відкрито на ${Math.round(event.hits/event.required*100)}%. Ще ${event.required-event.hits} вибухів поруч.`;
   bursts.push({x:event.x,y:event.y,radius:event.r,color:'#f6c877',age:0});
   floaters.push({x:event.x,y:event.y-65,text:event.opened?LEVELS[event.tier].weapon:`${Math.round(event.hits/event.required*100)}%`,life:1,color:'#ffcf85'});
-  if(event.opened){discovered.add(event.tier);highest=Math.max(highest,event.tier);updateScore();updateArsenal();checkMission(event.tier);soundEffect(event.tier,true);}
+  if(event.opened){discovered.add(event.tier);highest=Math.max(highest,event.tier);hudDirty=true;checkMission(event.tier);soundEffect(event.tier,true);}
 }
 
 function soundEffect(tier = 0, merge = false) {
@@ -427,6 +452,7 @@ function soundEffect(tier = 0, merge = false) {
   } catch {}
 }
 function renderNext() {
+  needsDraw = true;
   const c=$('next').getContext('2d');c.clearRect(0,0,240,170);
   drawCase(c,next,120,84,47,-.12);
   $('next-name').textContent=LEVELS[next].weapon;
@@ -507,7 +533,6 @@ function merged(e) {
   }
   if(current<world.minimumTier)current=world.minimumTier;
   if(next<world.minimumTier)next=world.minimumTier;
-  renderNext();
   const color=LEVELS[Math.min(e.tier,LEVELS.length-1)].color;
   const radius=world.radius(Math.min(e.tier,LEVELS.length-1));
   bursts.push({x:e.x,y:e.y,radius,color,age:0});
@@ -517,7 +542,10 @@ function merged(e) {
   // The two halves fly apart when the case opens.
   for(const sign of [-1,1])particles.push({x:e.x,y:e.y,vx:sign*4,vy:-3,life:1,color,size:radius*.8,shard:true,rotation:sign*.2});
   if(e.tier<LEVELS.length)discovered.add(e.tier);
-  highest=Math.max(highest,Math.min(e.tier,LEVELS.length-1));updateScore();updateArsenal();soundEffect(e.tier,true);
+  highest=Math.max(highest,Math.min(e.tier,LEVELS.length-1));hudDirty=true;soundEffect(e.tier,true);
+  if(particles.length>240)particles.splice(0,particles.length-240);
+  if(bursts.length>32)bursts.splice(0,bursts.length-32);
+  if(floaters.length>32)floaters.splice(0,floaters.length-32);
   checkMission(e.tier);
 }
 function reset(advance = false) {
@@ -544,12 +572,13 @@ function setAim(event) {
   const bounds=canvas.getBoundingClientRect(),x=(event.clientX-bounds.left)*520/bounds.width,time=performance.now();
   if(aimSample&&x!==aimSample.x){const elapsed=time-aimSample.time;flick=elapsed>0&&elapsed<120?Math.max(-3.5,Math.min(3.5,(x-aimSample.x)/elapsed*8)):0;}
   if(!aimSample||x!==aimSample.x)aimSample={x,time};
-  aim=x;
+  aim=x;needsDraw=true;
 }
 canvas.addEventListener('pointermove',setAim);
 canvas.addEventListener('pointerdown',event=>{if(event.button!==0)return;event.preventDefault();canvas.focus({preventScroll:true});setAim(event);canvas.setPointerCapture(event.pointerId);});
 canvas.addEventListener('pointerup',event=>{if(event.button!==0)return;setAim(event);drop();});
 canvas.addEventListener('keydown',event=>{
+  needsDraw=true;
   aimSample=null;flick=0;
   if(['ArrowLeft','ArrowRight',' ','Enter'].includes(event.key))event.preventDefault();
   if(event.key==='ArrowLeft')aim=Math.max(world.radius(current)+8,aim-18);
@@ -558,17 +587,19 @@ canvas.addEventListener('keydown',event=>{
 });
 $('sound').addEventListener('click',()=>{sound=!sound;$('sound').querySelector('span').hidden=sound;$('sound').setAttribute('aria-label',sound?'Вимкнути звук':'Увімкнути звук');$('sound').title=sound?'Вимкнути звук':'Увімкнути звук';if(sound)soundEffect(2,true);});
 function showModal(type) {
+  needsDraw=true;
   modal=type;paused=true;$('overlay').hidden=false;$('modal-cancel').hidden=type!=='restart';
   const content={
     help:['ПОЛЬОВИЙ ПОСІБНИК','Збирай свій арсенал','<p>На полі вже є купа з 67 кейсів. Вона почне рухатися після твого першого кидка. Почни зі звичайного Glock-18. Два однакові кейси дають Glock із першим скіном, ще два таких — із кращим. Після десяти скінів відкривається наступна зброя.</p><p>Рухай мишкою, щоб вибрати місце, і клікай, щоб скинути кейс. На телефоні — наведи пальцем і відпусти.</p><p>Зливаються лише однакова зброя з однаковим скіном. Нові кейси стають кращими разом із твоїм прогресом. Кейс зникає, коли відстає від твого найкращого рівня на 10 або більше. Це стосується саме його зброї та скіна; новіші скіни залишаються. За кожне злиття — фіксовані очки, без комбо.</p><p>Збери <strong>Karambit із золотим скіном</strong>. Якщо кейси залишаться над червоною лінією понад 2,5 секунди — раунд завершиться.</p><p class="modal-controls">Клавіатура: <kbd>←</kbd> <kbd>→</kbd> — рух, <kbd>Пробіл</kbd> — скинути.</p>','Погнали'],
     restart:['НОВИЙ РАУНД','Почати новий раунд?','<p>Поле знову заповниться 67 кейсами, а рахунок скинеться. Прогрес скінів почнеться зі звичайного Glock. Рекорд залишиться.</p>','Почати нову гру'],
+    level:['ЦІЛЬ ДОСЯГНУТО',`Рівень ${missionIndex+1} пройдено!`,`<p>Ти зібрав <strong>${LEVELS[MISSIONS[missionIndex].target].label}</strong>.</p><div class="modal-score">${world.score}</div>`,'Наступний рівень'],
     over:['РАУНД ЗАВЕРШЕНО','Арсенал заповнений',`<p>Твій результат</p><div class="modal-score">${world.score}</div><p>Відкрито кейсів: <strong>${world.merges}</strong><br>Найкраща зброя: <strong>${LEVELS[highest].label}</strong></p>`,'Ще один раунд'],
     win:['★ ЛЕГЕНДАРНИЙ ДРОП','Золотий Karambit у твоїх руках!',`<p>Ти пройшов увесь шлях від Glock-18 до легенди. Продовжуй об’єднувати кейси й покращуй рекорд!</p><div class="modal-score">${world.score}</div>`,'Продовжити'],
   }[type];
   $('modal-eyebrow').textContent=content[0];$('modal-title').textContent=content[1];$('modal-content').innerHTML=content[2];$('modal-action').innerHTML=content[3]+' <span>↗</span>';
   $('modal-action').focus({preventScroll:true});
 }
-function closeModal(){paused=false;modal='';$('overlay').hidden=true;canvas.focus({preventScroll:true});}
+function closeModal(){paused=false;modal='';needsDraw=true;$('overlay').hidden=true;canvas.focus({preventScroll:true});}
 $('help').addEventListener('click',()=>{if(!modal)showModal('help');});
 $('restart').addEventListener('click',()=>{if(world.bodies.length||world.score)showModal('restart');else reset();});
 $('modal-action').addEventListener('click',()=>{if(modal==='level')reset(true);else if(['over','restart','win'].includes(modal))reset();else closeModal();});
@@ -620,8 +651,11 @@ function draw() {
     ctx.beginPath();ctx.moveTo(p.x-p.vx*2,p.y-p.vy*2);ctx.lineTo(p.x,p.y);ctx.stroke();
   }ctx.restore();}
   for(const f of floaters){ctx.globalAlpha=Math.max(0,f.life);ctx.fillStyle=f.color;ctx.font='bold 20px monospace';ctx.textAlign='center';ctx.fillText(f.text,f.x,f.y);}ctx.globalAlpha=1;
-  $('status').textContent=world.over?'РАУНД ЗАВЕРШЕНО':paused?'ПАУЗА':!started?'КИНЬ КЕЙС — ПОЧНИ':danger?'ОБЕРЕЖНО, МЕЖА!':cooldown>0?'КЕЙС У ПОЛЬОТІ':'ГОТОВИЙ ДО ДРОПУ';
-  $('status').style.color=danger?'#e77666':'';
+  const status=world.over?'РАУНД ЗАВЕРШЕНО':paused?'ПАУЗА':!started?'КИНЬ КЕЙС — ПОЧНИ':danger?'ОБЕРЕЖНО, МЕЖА!':cooldown>0?'КЕЙС У ПОЛЬОТІ':'ГОТОВИЙ ДО ДРОПУ';
+  if($('status').textContent!==status)$('status').textContent=status;
+  if($('status').dataset.danger!==String(danger)){
+    $('status').dataset.danger=String(danger);$('status').style.color=danger?'#e77666':'';
+  }
 }
 let previous=performance.now(),accumulator=0;
 function frame(now) {
@@ -629,6 +663,7 @@ function frame(now) {
   if(!paused&&!document.hidden){
     accumulator+=elapsed;
     while(accumulator>=1000/60){
+      if(started||cooldown>0||particles.length||bursts.length||floaters.length)needsDraw=true;
       if(started&&!missionComplete)world.step();cooldown=Math.max(0,cooldown-1);
       for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vy+=.065;p.life-=p.shard?.025:.03;}
       for(const f of floaters){f.y-=.65;f.life-=.018;}
@@ -641,7 +676,9 @@ function frame(now) {
       if(paused)break;
     }
   }else accumulator=0;
-  draw();requestAnimationFrame(frame);
+  if(hudDirty){updateScore();updateArsenal();renderNext();hudDirty=false;}
+  if(needsDraw&&!document.hidden){draw();needsDraw=false;}
+  requestAnimationFrame(frame);
 }
 reset();requestAnimationFrame(frame);
 
