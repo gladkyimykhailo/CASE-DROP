@@ -46,14 +46,15 @@ const LEVELS = WEAPONS.flatMap((weapon, weaponTier) => [
   };
 }));
 
-function weaponStartTier(tier) {
-  const level = LEVELS[Math.min(tier, LEVELS.length - 1)];
-  return level.tier - level.variant - 1;
+function oldestActiveTier(highest) {
+  // A specific weapon + finish retires once it is ten levels behind.
+  // Clearing the final pair does not create a level beyond the catalogue.
+  return Math.max(0, Math.min(highest, LEVELS.length - 1) - 9);
 }
 
 function randomDropTier(highest, random = Math.random) {
   // New drops follow earned progress so all 110 levels remain reachable.
-  const floor = weaponStartTier(highest);
+  const floor = oldestActiveTier(highest);
   const ceiling = Math.max(floor, Math.min(LEVELS.length - 2, highest - 1));
   const offset = random() < .55 ? 0 : random() < .7 ? 1 : 2;
   return Math.max(floor, ceiling - offset);
@@ -142,9 +143,9 @@ class World {
       }
       if (consumed.size) {
         this.bodies = this.bodies.filter(b => !consumed.has(b.id));
-        // Retire old weapons for the whole batch before creating any results.
-        // A simultaneous merge must not bring a retired weapon back.
-        this.minimumTier = Math.max(this.minimumTier, weaponStartTier(Math.max(...results.map(event => event.tier))));
+        // Retire only individual levels ten or more steps behind the best result.
+        // Filter the entire batch so simultaneous merges cannot restore them.
+        this.minimumTier = Math.max(this.minimumTier, oldestActiveTier(Math.max(...results.map(event => event.tier))));
         const retired = this.bodies.filter(body => body.tier < this.minimumTier);
         this.bodies = this.bodies.filter(body => body.tier >= this.minimumTier);
         for (const event of results) {
@@ -363,7 +364,7 @@ function updateSkins() {
     if(!card.hidden)visible++;
     card.classList.toggle('reached',level.tier<=highest);
     card.classList.toggle('current',level.tier===highest);
-    card.querySelector('.skin-action').textContent=level.tier===highest?'◆ Твій рівень':level.tier<highest?'✓ Досягнуто':'Об’єднай два попередні';
+    card.querySelector('.skin-action').textContent=level.tier===highest?'◆ Твій рівень':level.tier<world.minimumTier?'Прибрано · відстав на 10+':level.tier<highest?'✓ Досягнуто':'Об’єднай два попередні';
   });
   $('skin-count').textContent=`${visible} рівнів`;
   const level=LEVELS[highest],upcoming=LEVELS[highest+1];
@@ -439,7 +440,7 @@ $('sound').addEventListener('click',()=>{sound=!sound;$('sound').querySelector('
 function showModal(type) {
   modal=type;paused=true;$('overlay').hidden=false;$('modal-cancel').hidden=type!=='restart';
   const content={
-    help:['ПОЛЬОВИЙ ПОСІБНИК','Збирай свій арсенал','<p>На полі вже є купа з 67 кейсів. Вона почне рухатися після твого першого кидка. Почни зі звичайного Glock-18. Два однакові кейси дають Glock із першим скіном, ще два таких — із кращим. Після десяти скінів відкривається наступна зброя.</p><p>Рухай мишкою, щоб вибрати місце, і клікай, щоб скинути кейс. На телефоні — наведи пальцем і відпусти.</p><p>Зливаються лише однакова зброя з однаковим скіном. Нові кейси стають кращими разом із твоїм прогресом. Коли відкриваєш наступну зброю, попередня зникає з поля й більше не випадає. За кожне злиття — фіксовані очки, без комбо.</p><p>Збери <strong>Karambit із золотим скіном</strong>. Якщо кейси залишаться над червоною лінією понад 2,5 секунди — раунд завершиться.</p><p class="modal-controls">Клавіатура: <kbd>←</kbd> <kbd>→</kbd> — рух, <kbd>Пробіл</kbd> — скинути.</p>','Погнали'],
+    help:['ПОЛЬОВИЙ ПОСІБНИК','Збирай свій арсенал','<p>На полі вже є купа з 67 кейсів. Вона почне рухатися після твого першого кидка. Почни зі звичайного Glock-18. Два однакові кейси дають Glock із першим скіном, ще два таких — із кращим. Після десяти скінів відкривається наступна зброя.</p><p>Рухай мишкою, щоб вибрати місце, і клікай, щоб скинути кейс. На телефоні — наведи пальцем і відпусти.</p><p>Зливаються лише однакова зброя з однаковим скіном. Нові кейси стають кращими разом із твоїм прогресом. Кейс зникає, коли відстає від твого найкращого рівня на 10 або більше. Це стосується саме його зброї та скіна; новіші скіни залишаються. За кожне злиття — фіксовані очки, без комбо.</p><p>Збери <strong>Karambit із золотим скіном</strong>. Якщо кейси залишаться над червоною лінією понад 2,5 секунди — раунд завершиться.</p><p class="modal-controls">Клавіатура: <kbd>←</kbd> <kbd>→</kbd> — рух, <kbd>Пробіл</kbd> — скинути.</p>','Погнали'],
     restart:['НОВИЙ РАУНД','Почати новий раунд?','<p>Поле знову заповниться 67 кейсами, а рахунок скинеться. Прогрес скінів почнеться зі звичайного Glock. Рекорд залишиться.</p>','Почати нову гру'],
     over:['РАУНД ЗАВЕРШЕНО','Арсенал заповнений',`<p>Твій результат</p><div class="modal-score">${world.score}</div><p>Відкрито кейсів: <strong>${world.merges}</strong><br>Найкраща зброя: <strong>${LEVELS[highest].label}</strong></p>`,'Ще один раунд'],
     win:['★ ЛЕГЕНДАРНИЙ ДРОП','Золотий Karambit у твоїх руках!',`<p>Ти пройшов увесь шлях від Glock-18 до легенди. Продовжуй об’єднувати кейси й покращуй рекорд!</p><div class="modal-score">${world.score}</div>`,'Продовжити'],
