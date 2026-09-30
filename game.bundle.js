@@ -61,19 +61,82 @@ function randomDropTier(highest, random = Math.random) {
 }
 
 
+// Each mission asks for a merge that is absent from its starting pile.
+const MISSIONS = [23, 34, 45, 56, 67, 78, 89, 100, 104, 109].map((target, index) => {
+  const weapon = LEVELS[target].weaponTier;
+  const pool = Array.from({ length: Math.min(5, weapon + 1) }, (_, i) => (weapon - i) * 11);
+  pool[0] = target - 1;
+  if (pool.length < 4) pool.push((weapon + 1) * 11);
+  return { number: index + 1, target, pool, label: LEVELS[target].label };
+});
+
+function missionDrop(mission, bodies, random = Math.random) {
+  if (random() < .5) return mission.target - 1;
+  const matches = bodies.filter(b => !b.mystery && mission.pool.some(tier =>
+    LEVELS[tier].weaponTier === LEVELS[b.tier].weaponTier) &&
+    (LEVELS[b.tier].weaponTier !== LEVELS[mission.target].weaponTier || b.tier < mission.target));
+  if (matches.length && random() < .75) return matches[Math.floor(random() * matches.length)].tier;
+  return mission.pool[Math.floor(random() * mission.pool.length)];
+}
+
+function missionReached(mission, tier) {
+  return tier < LEVELS.length && LEVELS[tier].weaponTier === LEVELS[mission.target].weaponTier && tier >= mission.target;
+}
+
+
 class World {
-  constructor(width = 520, height = 630, onMerge = () => {}) {
+  constructor(width = 520, height = 630, onMerge = () => {}, options = {}) {
     this.width = width; this.height = height; this.onMerge = onMerge;
     this.bodies = []; this.nextId = 0; this.score = 0; this.merges = 0;
     this.dangerTime = 0; this.over = false; this.minimumTier = 0;
+    this.options = options;
   }
   add(tier, x, y = 48) {
     tier = Math.max(this.minimumTier, tier);
-    const r = LEVELS[tier].radius;
+    const r = this.radius(tier);
     const body = { id: this.nextId++, tier, r, x: Math.max(r + 9, Math.min(this.width - r - 9, x)), y, vx: 0, vy: 0, omega: 0, age: 0, angle: 0, born: 0, merged: false };
     this.bodies.push(body); return body;
   }
+  radius(tier) {
+    return this.options.mission ? 25 + LEVELS[tier].weaponTier * 1.1 + Math.max(0, LEVELS[tier].variant) * .3 : LEVELS[tier].radius;
+  }
+  addMystery(x, y) {
+    const body = { id: this.nextId++, mystery: true, tier: null, r: 60, x, y,
+      vx: 0, vy: 0, omega: 0, age: 0, angle: 0, born: 30, hits: 0, required: 8 };
+    this.bodies.push(body); return body;
+  }
+  hitMysteries(event) {
+    for (const chest of [...this.bodies]) {
+      if (!chest.mystery || Math.hypot(chest.x-event.x,chest.y-event.y) > chest.r + event.sourceRadius + 65) continue;
+      chest.hits++;
+      if (chest.hits < chest.required) {
+        this.options.onMystery?.({ ...chest, opened: false });
+        continue;
+      }
+      this.bodies = this.bodies.filter(b => b !== chest);
+      const rewards = this.options.mysteryRewards || [1, 12, 23];
+      const tier = rewards[Math.floor((this.options.random || Math.random)() * rewards.length)];
+      const reward = this.add(tier, chest.x, chest.y);
+      reward.born = 0; reward.age = 30; reward.merged = true; reward.vy = -2;
+      const points = 200; this.score += points;
+      this.options.onMystery?.({ ...chest, opened: true, tier: reward.tier, points });
+    }
+  }
   seedCases() {
+    if (this.options.mission) {
+      const chest = this.addMystery(this.width / 2, this.height - 205);
+      const pool = this.options.mission.pool;
+      for (let row = 0; row < 6; row++) {
+        for (let col = 0; col < (row % 2 ? 6 : 7); col++) {
+          const tier = pool[(col + row * 2) % pool.length];
+          const x = 49 + (row % 2) * 35 + col * 70, y = this.height - 45 - row * 58;
+          if (Math.hypot(x-chest.x,y-chest.y) < chest.r + this.radius(tier) + 3) continue;
+          const body = this.add(tier,x,y);body.born = 30;
+          body.angle = ((col * 7 + row * 3) % 9 - 4) * .08;
+        }
+      }
+      return;
+    }
     // A dense, staggered pile reaches above the DROP watermark.
     for (let row = 0; row < 7; row++) {
       const count = row % 2 ? 9 : 10;
@@ -113,7 +176,7 @@ class World {
         let dx = b.x - a.x, dy = b.y - a.y;
         let distance = Math.hypot(dx, dy);
         if (distance >= a.r + b.r) continue;
-        if (a.tier === b.tier) {
+        if (!a.mystery && !b.mystery && a.tier === b.tier) {
           consumed.add(a.id); consumed.add(b.id);
           const tier = a.tier + 1, points = tier * 8;
           this.score += points; this.merges++;
@@ -145,9 +208,9 @@ class World {
         this.bodies = this.bodies.filter(b => !consumed.has(b.id));
         // Retire only individual levels ten or more steps behind the best result.
         // Filter the entire batch so simultaneous merges cannot restore them.
-        this.minimumTier = Math.max(this.minimumTier, oldestActiveTier(Math.max(...results.map(event => event.tier))));
-        const retired = this.bodies.filter(body => body.tier < this.minimumTier);
-        this.bodies = this.bodies.filter(body => body.tier >= this.minimumTier);
+        if (!this.options.mission) this.minimumTier = Math.max(this.minimumTier, oldestActiveTier(Math.max(...results.map(event => event.tier))));
+        const retired = this.bodies.filter(body => !body.mystery && body.tier < this.minimumTier);
+        this.bodies = this.bodies.filter(body => body.mystery || body.tier >= this.minimumTier);
         for (const event of results) {
           if (event.tier >= this.minimumTier && event.tier < LEVELS.length) {
             const body = this.add(event.tier, event.x, event.y);
@@ -156,6 +219,7 @@ class World {
             body.angle = event.angle; body.age = 30; body.merged = true;
           }
           this.onMerge({ ...event, retired: event === results[0] ? retired : [] });
+          this.hitMysteries(event);
         }
       }
     }
@@ -287,16 +351,63 @@ function drawCase(c, tier, x, y, radius, angle = 0, alpha = 1) {
   c.restore();
 }
 
+function drawMysteryCase(c, body) {
+  const progress = body.hits / body.required;
+  c.save();c.translate(body.x,body.y);
+  // Keep the lock and meter upright while the heavy case moves in the pile.
+  c.shadowColor='#f6a34355';c.shadowBlur=12+progress*15;
+  c.fillStyle='#171c25';c.strokeStyle='#e8b05f';c.lineWidth=3;
+  c.beginPath();c.roundRect(-53,-33,106,76,10);c.fill();c.stroke();
+  c.shadowBlur=0;
+  c.fillStyle='#ffd68a';c.globalAlpha=progress*.7;
+  c.fillRect(-47,-32-progress*20,94,progress*20+5);c.globalAlpha=1;
+  c.save();c.translate(-53,-33);c.rotate(-progress*.38);
+  c.fillStyle='#38424d';c.beginPath();c.roundRect(0,-15,106,26,6);c.fill();c.stroke();
+  c.fillStyle='#c59751';c.fillRect(17,-14,8,24);c.fillRect(81,-14,8,24);c.restore();
+  c.strokeStyle='#d8b778';c.lineWidth=3;c.beginPath();c.arc(0,-6,9,Math.PI,0);c.stroke();
+  c.fillStyle='#e8b05f';c.beginPath();c.roundRect(-13,-6,26,25,4);c.fill();
+  c.fillStyle='#252a32';c.textAlign='center';c.font='bold 22px monospace';c.fillText('?',0,14);
+  for(let i=0;i<body.required;i++){
+    c.fillStyle=i<body.hits?'#ffd383':'#51525a';c.fillRect(-43+i*11,29,8,5);
+  }
+  c.fillStyle='#ffe2ad';c.font='bold 10px monospace';c.fillText(`${Math.round(progress*100)}%`,0,57);
+  c.restore();
+}
+
 
 const $ = id => document.getElementById(id);
 const canvas = $('game'), ctx = canvas.getContext('2d');
 let world, current, next, aim = 260, cooldown = 0, particles = [], floaters = [], paused = false, modal = '', highest = 0, won = false;
 let sound = false, audio, started = false;
 let bursts = [], aimSample = null, flick = 0, victoryDelay = 0;
+let missionIndex = 0, missionComplete = false, discovered = new Set();
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-let best = 0; try { best = Number(localStorage.getItem('case-drop-progression-best')) || 0; } catch {}
+let best = 0; try { best = Number(localStorage.getItem('case-drop-missions-best')) || 0; } catch {}
 $('best').textContent = best.toLocaleString('uk-UA');
-const randomTier = () => randomDropTier(highest);
+const randomTier = () => missionDrop(MISSIONS[missionIndex],world.bodies);
+
+function updateMission() {
+  const mission=MISSIONS[missionIndex],target=LEVELS[mission.target];
+  $('mission-number').textContent=`${mission.number} / ${MISSIONS.length}`;
+  $('mission-target').textContent=target.weapon;$('mission-finish').textContent=target.name;
+  $('mission-hint').textContent=missionComplete?'✓ Ціль досягнуто!':`Об’єднай два кейси: ${LEVELS[mission.target-1].label}.`;
+  $('mission-title').closest('section').classList.toggle('complete',missionComplete);
+  const c=$('target-art').getContext('2d');c.clearRect(0,0,180,80);
+  drawWeapon(c,target.weaponTier,90,40,165,0,target.variant);
+}
+function checkMission(tier) {
+  if(!missionComplete&&missionReached(MISSIONS[missionIndex],tier)){
+    missionComplete=true;victoryDelay=65;updateMission();
+  }
+}
+function mysteryChanged(event) {
+  $('mystery-count').textContent=event.opened?'ВІДКРИТО':`${event.hits} / ${event.required}`;
+  $('mystery-progress').value=event.hits;
+  $('mystery-hint').textContent=event.opened?`Усередині: ${LEVELS[event.tier].label}! +${event.points} очок`:`Замок відкрито на ${Math.round(event.hits/event.required*100)}%. Ще ${event.required-event.hits} вибухів поруч.`;
+  bursts.push({x:event.x,y:event.y,radius:event.r,color:'#f6c877',age:0});
+  floaters.push({x:event.x,y:event.y-65,text:event.opened?LEVELS[event.tier].weapon:`${Math.round(event.hits/event.required*100)}%`,life:1,color:'#ffcf85'});
+  if(event.opened){discovered.add(event.tier);highest=Math.max(highest,event.tier);updateScore();updateArsenal();checkMission(event.tier);soundEffect(event.tier,true);}
+}
 
 function soundEffect(tier = 0, merge = false) {
   if (!sound) return;
@@ -328,7 +439,7 @@ function updateArsenal() {
   [...$('weapon-list').children].forEach((el,i)=>{
     const level=LEVELS[start+i];
     el.classList.toggle('current',level.tier===highest);
-    el.classList.toggle('locked',level.tier>highest);
+    el.classList.toggle('locked',!discovered.has(level.tier));
     el.querySelector('.weapon-name').textContent=level.weapon;
     el.querySelector('.weapon-tier').textContent=level.name;
     el.querySelector('.weapon-tier').style.color=level.color;
@@ -362,9 +473,9 @@ function updateSkins() {
   skinCards.forEach(({card,level})=>{
     card.hidden=filter!=='all'&&level.weaponTier!==Number(filter);
     if(!card.hidden)visible++;
-    card.classList.toggle('reached',level.tier<=highest);
+    card.classList.toggle('reached',discovered.has(level.tier));
     card.classList.toggle('current',level.tier===highest);
-    card.querySelector('.skin-action').textContent=level.tier===highest?'◆ Твій рівень':level.tier<world.minimumTier?'Прибрано · відстав на 10+':level.tier<highest?'✓ Досягнуто':'Об’єднай два попередні';
+    card.querySelector('.skin-action').textContent=level.tier===MISSIONS[missionIndex].target?'◎ Ціль рівня':discovered.has(level.tier)?'✓ В арсеналі':'Об’єднай два попередні';
   });
   $('skin-count').textContent=`${visible} рівнів`;
   const level=LEVELS[highest],upcoming=LEVELS[highest+1];
@@ -374,12 +485,12 @@ $('skin-filter').addEventListener('change',updateSkins);
 
 function renderChain() {
   const steps=$('upgrade-chain');steps.replaceChildren();
-  const start=Math.min(highest,LEVELS.length-3);
+  const start=Math.min(MISSIONS[missionIndex].target-1,LEVELS.length-3);
   for(let tier=start;tier<start+3;tier++){
     const level=LEVELS[tier],item=document.createElement('li');
-    item.className='chain-step';item.classList.toggle('current',tier===highest);
-    if(tier===highest)item.setAttribute('aria-current','step');
-    item.innerHTML=`<span class="chain-stage">${tier===highest?'ТВІЙ РІВЕНЬ':tier<highest?'ПРОЙДЕНО':`ДАЛІ · ${tier+1}`}</span><canvas width="140" height="60" aria-hidden="true"></canvas><strong>${level.weapon}</strong><span>${level.name}</span>`;
+    item.className='chain-step';item.classList.toggle('current',tier===MISSIONS[missionIndex].target);
+    if(tier===MISSIONS[missionIndex].target)item.setAttribute('aria-current','step');
+    item.innerHTML=`<span class="chain-stage">${tier===MISSIONS[missionIndex].target?'ЦІЛЬ РІВНЯ':tier<MISSIONS[missionIndex].target?'ОБ’ЄДНАЙ ДВА':'НАСТУПНИЙ СКІН'}</span><canvas width="140" height="60" aria-hidden="true"></canvas><strong>${level.weapon}</strong><span>${level.name}</span>`;
     drawWeapon(item.querySelector('canvas').getContext('2d'),level.weaponTier,70,30,125,0,level.variant);
     steps.append(item);
   }
@@ -388,7 +499,7 @@ function renderChain() {
 
 function updateScore() {
   $('score').textContent=String(world.score).padStart(4,'0');$('merges').textContent=world.merges;
-  if(world.score>best){best=world.score;$('best').textContent=best.toLocaleString('uk-UA');try{localStorage.setItem('case-drop-progression-best',String(best));}catch{}}
+  if(world.score>best){best=world.score;$('best').textContent=best.toLocaleString('uk-UA');try{localStorage.setItem('case-drop-missions-best',String(best));}catch{}}
 }
 function merged(e) {
   for(const body of e.retired){
@@ -398,22 +509,31 @@ function merged(e) {
   if(next<world.minimumTier)next=world.minimumTier;
   renderNext();
   const color=LEVELS[Math.min(e.tier,LEVELS.length-1)].color;
-  const radius=LEVELS[Math.min(e.tier,LEVELS.length-1)].radius;
+  const radius=world.radius(Math.min(e.tier,LEVELS.length-1));
   bursts.push({x:e.x,y:e.y,radius,color,age:0});
   const sparkCount=reducedMotion?8:36;
   for(let i=0;i<sparkCount;i++) {const angle=Math.PI*2*i/sparkCount+Math.random()*.18,speed=2+Math.random()*5;particles.push({x:e.x,y:e.y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,life:1,color,size:1.5+Math.random()*2.5});}
   floaters.push({x:e.x,y:e.y-radius-12,text:`+${e.points}`,life:1,color});
   // The two halves fly apart when the case opens.
   for(const sign of [-1,1])particles.push({x:e.x,y:e.y,vx:sign*4,vy:-3,life:1,color,size:radius*.8,shard:true,rotation:sign*.2});
+  if(e.tier<LEVELS.length)discovered.add(e.tier);
   highest=Math.max(highest,Math.min(e.tier,LEVELS.length-1));updateScore();updateArsenal();soundEffect(e.tier,true);
-  if(e.tier===LEVELS.length-1&&!won){won=true;victoryDelay=65;}
+  checkMission(e.tier);
 }
-function reset() {
-  world=new World(520,630,merged);world.seedCases();started=false;current=0;next=0;cooldown=0;particles=[];floaters=[];bursts=[];highest=0;won=false;aim=260;aimSample=null;flick=0;victoryDelay=0;
-  closeModal();updateScore();renderNext();updateArsenal();
+function reset(advance = false) {
+  const score=advance?world.score:0,merges=advance?world.merges:0;
+  if(advance)missionIndex++;else{missionIndex=0;discovered=new Set();}
+  const mission=MISSIONS[missionIndex];missionComplete=false;
+  world=new World(520,630,merged,{mission,onMystery:mysteryChanged,mysteryRewards:mission.pool.map(tier=>tier+1)});
+  world.score=score;world.merges=merges;world.seedCases();
+  for(const body of world.bodies)if(!body.mystery)discovered.add(body.tier);
+  started=false;current=mission.target-1;next=randomTier();cooldown=0;particles=[];floaters=[];bursts=[];highest=Math.max(...discovered);won=false;aim=260;aimSample=null;flick=0;victoryDelay=0;
+  $('mystery-count').textContent='0 / 8';$('mystery-progress').value=0;
+  $('mystery-hint').textContent='Вміст невідомий. Зливай кейси поруч — відкривай замок.';
+  closeModal();updateScore();renderNext();updateArsenal();updateMission();
 }
 function drop() {
-  if(paused||world.over||cooldown>0)return;
+  if(paused||world.over||cooldown>0||victoryDelay>0)return;
   started=true;
   const body=world.add(current,aim,48);
   if(aimSample&&performance.now()-aimSample.time<120){body.vx=flick;body.omega=flick/body.r;}
@@ -432,8 +552,8 @@ canvas.addEventListener('pointerup',event=>{if(event.button!==0)return;setAim(ev
 canvas.addEventListener('keydown',event=>{
   aimSample=null;flick=0;
   if(['ArrowLeft','ArrowRight',' ','Enter'].includes(event.key))event.preventDefault();
-  if(event.key==='ArrowLeft')aim=Math.max(LEVELS[current].radius+8,aim-18);
-  if(event.key==='ArrowRight')aim=Math.min(512-LEVELS[current].radius,aim+18);
+  if(event.key==='ArrowLeft')aim=Math.max(world.radius(current)+8,aim-18);
+  if(event.key==='ArrowRight')aim=Math.min(512-world.radius(current),aim+18);
   if((event.key===' '||event.key==='Enter')&&!event.repeat)drop();
 });
 $('sound').addEventListener('click',()=>{sound=!sound;$('sound').querySelector('span').hidden=sound;$('sound').setAttribute('aria-label',sound?'Вимкнути звук':'Увімкнути звук');$('sound').title=sound?'Вимкнути звук':'Увімкнути звук';if(sound)soundEffect(2,true);});
@@ -451,9 +571,9 @@ function showModal(type) {
 function closeModal(){paused=false;modal='';$('overlay').hidden=true;canvas.focus({preventScroll:true});}
 $('help').addEventListener('click',()=>{if(!modal)showModal('help');});
 $('restart').addEventListener('click',()=>{if(world.bodies.length||world.score)showModal('restart');else reset();});
-$('modal-action').addEventListener('click',()=>{if(modal==='over'||modal==='restart')reset();else closeModal();});
+$('modal-action').addEventListener('click',()=>{if(modal==='level')reset(true);else if(['over','restart','win'].includes(modal))reset();else closeModal();});
 $('modal-cancel').addEventListener('click',closeModal);
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&['help','restart','win'].includes(modal))closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&['help','restart'].includes(modal))closeModal();});
 
 function draw() {
   ctx.clearRect(0,0,520,630);
@@ -461,7 +581,7 @@ function draw() {
   ctx.strokeStyle=danger?'#e87762':'#9c635b60';ctx.lineWidth=danger?2:1;ctx.setLineDash([5,7]);ctx.beginPath();ctx.moveTo(9,112);ctx.lineTo(511,112);ctx.stroke();ctx.setLineDash([]);
   if(danger){ctx.fillStyle=`rgba(224,89,65,${.04+Math.sin(performance.now()/140)*.02})`;ctx.fillRect(0,100,520,85);}
   ctx.strokeStyle='#596a4940';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(8,610);ctx.lineTo(8,622);ctx.lineTo(23,622);ctx.moveTo(497,622);ctx.lineTo(512,622);ctx.lineTo(512,610);ctx.stroke();
-  const r=LEVELS[current].radius,x=Math.max(r+8,Math.min(512-r,aim));
+  const r=world.radius(current),x=Math.max(r+8,Math.min(512-r,aim));
   if(!world.over) {
     let landing=622-r;
     for(const b of world.bodies){const dx=b.x-x;if(Math.abs(dx)<r+b.r){const hit=b.y-Math.sqrt((r+b.r)**2-dx**2);if(hit>48)landing=Math.min(landing,hit);}}
@@ -473,6 +593,7 @@ function draw() {
     ctx.fillStyle='#e8b05f';ctx.beginPath();ctx.moveTo(x-4,7);ctx.lineTo(x+4,7);ctx.lineTo(x,12);ctx.fill();
   }
   for(const b of world.bodies){
+    if(b.mystery){drawMysteryCase(ctx,b);continue;}
     let scale=b.born<12?(.86+Math.min(b.born/12,1)*.14):1;
     if(b.merged&&!reducedMotion&&b.born<30){const t=b.born/30;scale=1-.32*Math.cos(t*Math.PI*3)*Math.exp(-t*4);}
     drawCase(ctx,b.tier,b.x,b.y,b.r*scale,b.angle,1);
@@ -508,15 +629,15 @@ function frame(now) {
   if(!paused&&!document.hidden){
     accumulator+=elapsed;
     while(accumulator>=1000/60){
-      if(started)world.step();cooldown=Math.max(0,cooldown-1);
+      if(started&&!missionComplete)world.step();cooldown=Math.max(0,cooldown-1);
       for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vy+=.065;p.life-=p.shard?.025:.03;}
       for(const f of floaters){f.y-=.65;f.life-=.018;}
       for(const burst of bursts)burst.age++;
       bursts=bursts.filter(burst=>burst.age<42);
       particles=particles.filter(p=>p.life>0);floaters=floaters.filter(f=>f.life>0);
       accumulator-=1000/60;
-      if(world.over){showModal('over');break;}
-      if(victoryDelay>0&&--victoryDelay===0){showModal('win');break;}
+      if(world.over&&!missionComplete){showModal('over');break;}
+      if(victoryDelay>0&&--victoryDelay===0){showModal(missionIndex===MISSIONS.length-1?'win':'level');break;}
       if(paused)break;
     }
   }else accumulator=0;
