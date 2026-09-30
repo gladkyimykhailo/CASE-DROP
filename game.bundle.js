@@ -61,20 +61,18 @@ function randomDropTier(highest, random = Math.random) {
 }
 
 
-// Each mission asks for a merge that is absent from its starting pile.
+// Each target requires a chain of 4–6 upgrades from the strongest drop.
 const MISSIONS = [23, 34, 45, 56, 67, 78, 89, 100, 104, 109].map((target, index) => {
-  const weapon = LEVELS[target].weaponTier;
-  const pool = Array.from({ length: Math.min(5, weapon + 1) }, (_, i) => (weapon - i) * 11);
-  pool[0] = target - 1;
-  if (pool.length < 4) pool.push((weapon + 1) * 11);
-  return { number: index + 1, target, pool, label: LEVELS[target].label };
+  const depth = 4 + Math.floor(index / 4), dropTier = target - depth;
+  const pool = [dropTier, dropTier - 1, dropTier - 2, dropTier - 3];
+  return { number: index + 1, target, depth, dropTier, pool,
+    seedPool: pool.slice(2), mysteryRewards: [dropTier, dropTier + 1], label: LEVELS[target].label };
 });
 
 function missionDrop(mission, bodies, random = Math.random) {
-  if (random() < .5) return mission.target - 1;
-  const matches = bodies.filter(b => !b.mystery && mission.pool.some(tier =>
-    LEVELS[tier].weaponTier === LEVELS[b.tier].weaponTier) &&
-    (LEVELS[b.tier].weaponTier !== LEVELS[mission.target].weaponTier || b.tier < mission.target));
+  if (random() < .7) return mission.dropTier;
+  // Help match low cases without handing out the upgrades the player earned.
+  const matches = bodies.filter(b => !b.mystery && mission.pool.includes(b.tier));
   if (matches.length && random() < .75) return matches[Math.floor(random() * matches.length)].tier;
   return mission.pool[Math.floor(random() * mission.pool.length)];
 }
@@ -127,8 +125,8 @@ class World {
   seedCases() {
     if (this.options.mission) {
       const chest = this.addMystery(this.width / 2, this.height - 205);
-      const pool = this.options.mission.pool;
-      for (let row = 0; row < 6; row++) {
+      const pool = this.options.mission.seedPool;
+      for (let row = 0; row < 4; row++) {
         for (let col = 0; col < (row % 2 ? 6 : 7); col++) {
           const tier = pool[(col + row * 2) % pool.length];
           const x = 49 + (row % 2) * 35 + col * 70, y = this.height - 45 - row * 58;
@@ -422,7 +420,7 @@ function updateMission() {
   const mission=MISSIONS[missionIndex],target=LEVELS[mission.target];
   $('mission-number').textContent=`${mission.number} / ${MISSIONS.length}`;
   $('mission-target').textContent=target.weapon;$('mission-finish').textContent=target.name;
-  $('mission-hint').textContent=missionComplete?'✓ Ціль досягнуто!':`Об’єднай два кейси: ${LEVELS[mission.target-1].label}.`;
+  $('mission-hint').textContent=missionComplete?'✓ Ціль досягнуто!':`Від ${LEVELS[mission.dropTier].label} до цілі — ${mission.depth} послідовних покращень. Збирай пари однакових кейсів.`;
   $('mission-title').closest('section').classList.toggle('complete',missionComplete);
   const c=$('target-art').getContext('2d');c.clearRect(0,0,180,80);
   drawWeapon(c,target.weaponTier,90,40,165,0,target.variant);
@@ -518,7 +516,9 @@ $('skin-filter').addEventListener('change',updateSkins);
 
 function renderChain() {
   const steps=$('upgrade-chain');steps.replaceChildren();
-  const start=Math.min(MISSIONS[missionIndex].target-1,LEVELS.length-3);
+  const mission=MISSIONS[missionIndex];
+  const bestOnField=Math.max(mission.dropTier,...world.bodies.filter(b=>!b.mystery).map(b=>b.tier));
+  const start=Math.min(bestOnField,mission.target-2);
   for(let tier=start;tier<start+3;tier++){
     const level=LEVELS[tier],item=document.createElement('li');
     item.className='chain-step';item.classList.toggle('current',tier===MISSIONS[missionIndex].target);
@@ -559,10 +559,10 @@ function reset(advance = false) {
   const score=advance?world.score:0,merges=advance?world.merges:0;
   if(advance)missionIndex++;else{missionIndex=0;discovered=new Set();}
   const mission=MISSIONS[missionIndex];missionComplete=false;
-  world=new World(520,630,merged,{mission,onMystery:mysteryChanged,mysteryRewards:mission.pool.map(tier=>tier+1)});
+  world=new World(520,630,merged,{mission,onMystery:mysteryChanged,mysteryRewards:mission.mysteryRewards});
   world.score=score;world.merges=merges;world.seedCases();
   for(const body of world.bodies)if(!body.mystery)discovered.add(body.tier);
-  started=false;current=mission.target-1;next=randomTier();cooldown=0;particles=[];floaters=[];bursts=[];highest=Math.max(...discovered);won=false;aim=260;aimSample=null;flick=0;victoryDelay=0;
+  started=false;current=mission.dropTier;next=randomTier();cooldown=0;particles=[];floaters=[];bursts=[];highest=Math.max(...discovered);won=false;aim=260;aimSample=null;flick=0;victoryDelay=0;
   $('mystery-count').textContent='0 / 8';$('mystery-progress').value=0;
   $('mystery-hint').textContent='Вміст невідомий. Зливай кейси поруч — відкривай замок.';
   closeModal();updateScore();renderNext();updateArsenal();updateMission();
@@ -598,8 +598,8 @@ function showModal(type) {
   needsDraw=true;
   modal=type;paused=true;$('overlay').hidden=false;$('modal-cancel').hidden=type!=='restart';
   const content={
-    help:['ПОЛЬОВИЙ ПОСІБНИК','Збирай свій арсенал','<p>На полі вже є купа з 67 кейсів. Вона почне рухатися після твого першого кидка. Почни зі звичайного Glock-18. Два однакові кейси дають Glock із першим скіном, ще два таких — із кращим. Після десяти скінів відкривається наступна зброя.</p><p>Рухай мишкою, щоб вибрати місце, і клікай, щоб скинути кейс. На телефоні — наведи пальцем і відпусти.</p><p>Зливаються лише однакова зброя з однаковим скіном. Нові кейси стають кращими разом із твоїм прогресом. Кейс зникає, коли відстає від твого найкращого рівня на 10 або більше. Це стосується саме його зброї та скіна; новіші скіни залишаються. За кожне злиття — фіксовані очки, без комбо.</p><p>Збери <strong>Karambit із золотим скіном</strong>. Якщо кейси залишаться над червоною лінією понад 2,5 секунди — раунд завершиться.</p><p class="modal-controls">Клавіатура: <kbd>←</kbd> <kbd>→</kbd> — рух, <kbd>Пробіл</kbd> — скинути.</p>','Погнали'],
-    restart:['НОВИЙ РАУНД','Почати новий раунд?','<p>Поле знову заповниться 67 кейсами, а рахунок скинеться. Прогрес скінів почнеться зі звичайного Glock. Рекорд залишиться.</p>','Почати нову гру'],
+    help:['ПОЛЬОВИЙ ПОСІБНИК','Збирай свій арсенал','<p>Пройди 10 рівнів: на кожному збери зброю зі скіном, указаним у завданні. Початкова купа почне рухатися після першого кидка.</p><p>Рухай мишкою та клікай, щоб скинути кейс. На телефоні — наведи пальцем і відпусти. Два кейси з однаковою зброєю та скіном зливаються в наступне покращення.</p><p>До цілі потрібно пройти 4 покращення на рівнях 1–4, 5 на рівнях 5–8 і 6 на рівнях 9–10. Покращені кейси збирай на полі: черга не видає готові пари для перемоги.</p><p>Вісім злиттів поруч відкриють таємний кейс із бонусом. Не дай кейсам залишатися вище червоної лінії понад 2,5 секунди.</p><p class="modal-controls">Клавіатура: <kbd>←</kbd> <kbd>→</kbd> — рух, <kbd>Пробіл</kbd> — скинути.</p>','Погнали'],
+    restart:['НОВИЙ РАУНД','Почати нову гру?','<p>Ти повернешся до першого рівня, а рахунок скинеться. Рекорд залишиться.</p>','Почати нову гру'],
     level:['ЦІЛЬ ДОСЯГНУТО',`Рівень ${missionIndex+1} пройдено!`,`<p>Ти зібрав <strong>${LEVELS[MISSIONS[missionIndex].target].label}</strong>.</p><div class="modal-score">${world.score}</div>`,'Наступний рівень'],
     over:['РАУНД ЗАВЕРШЕНО','Арсенал заповнений',`<p>Твій результат</p><div class="modal-score">${world.score}</div><p>Відкрито кейсів: <strong>${world.merges}</strong><br>Найкраща зброя: <strong>${LEVELS[highest].label}</strong></p>`,'Ще один раунд'],
     win:['★ ЛЕГЕНДАРНИЙ ДРОП','Золотий Karambit у твоїх руках!',`<p>Ти пройшов увесь шлях від Glock-18 до легенди. Продовжуй об’єднувати кейси й покращуй рекорд!</p><div class="modal-score">${world.score}</div>`,'Продовжити'],
