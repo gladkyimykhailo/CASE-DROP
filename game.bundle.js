@@ -61,13 +61,32 @@ function randomDropTier(highest, random = Math.random) {
 }
 
 
-// Each target requires a chain of 4–6 upgrades from the strongest drop.
-const MISSIONS = [23, 34, 45, 56, 67, 78, 89, 100, 104, 109].map((target, index) => {
-  const depth = 4 + Math.floor(index / 4), dropTier = target - depth;
-  const pool = [dropTier, dropTier - 1, dropTier - 2, dropTier - 3];
-  return { number: index + 1, target, depth, dropTier, pool,
-    seedPool: pool.slice(2), mysteryRewards: [dropTier, dropTier + 1], label: LEVELS[target].label };
-});
+const MISSION_COUNT = 10;
+const MYSTERY_HITS = 30;
+
+function shuffled(values, random = Math.random) {
+  const result = [...values];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+// Random goals, without duplicates in a run; difficulty still grows by stage.
+function createMissions(random = Math.random) {
+  const targets = shuffled(LEVELS.filter(level => level.tier >= 28).map(level => level.tier), random);
+  return targets.slice(0, MISSION_COUNT).map((target, index) => {
+    const depth = 4 + Math.floor(index / 4), dropTier = target - depth;
+    const otherWeapons = shuffled(LEVELS.filter(level => level.variant === -1 &&
+      level.tier < dropTier - 5 && level.weaponTier !== LEVELS[dropTier - 3].weaponTier), random);
+    const seedPool = [dropTier - 3, dropTier - 4, dropTier - 5,
+      ...otherWeapons.slice(0, 2).map(level => level.tier)];
+    const pool = [...new Set([dropTier, dropTier - 1, dropTier - 2, ...seedPool])];
+    return { number: index + 1, target, depth, dropTier, pool, seedPool,
+      mysteryRewards: [dropTier, dropTier + 1], label: LEVELS[target].label };
+  });
+}
 
 function missionDrop(mission, bodies, random = Math.random) {
   if (random() < .7) return mission.dropTier;
@@ -102,7 +121,7 @@ class World {
   }
   addMystery(x, y) {
     const body = { id: this.nextId++, mystery: true, tier: null, r: 60, x, y,
-      vx: 0, vy: 0, omega: 0, age: 0, angle: 0, born: 30, hits: 0, required: 8 };
+      vx: 0, vy: 0, omega: 0, age: 0, angle: 0, born: 30, hits: 0, required: MYSTERY_HITS };
     this.bodies.push(body); return body;
   }
   hitMysteries(event) {
@@ -125,13 +144,14 @@ class World {
   seedCases() {
     if (this.options.mission) {
       const chest = this.addMystery(this.width / 2, this.height - 205);
-      const pool = this.options.mission.seedPool;
-      for (let row = 0; row < 4; row++) {
+      const pool = shuffled(this.options.mission.seedPool, this.options.random || Math.random);
+      let slot = 0;
+      for (let row = 0; row < 7; row++) {
         for (let col = 0; col < (row % 2 ? 6 : 7); col++) {
-          const tier = pool[(col + row * 2) % pool.length];
-          const x = 49 + (row % 2) * 35 + col * 70, y = this.height - 45 - row * 58;
+          const tier = pool[slot % pool.length];
+          const x = 49 + (row % 2) * 35 + col * 70, y = this.height - 45 - row * 64;
           if (Math.hypot(x-chest.x,y-chest.y) < chest.r + this.radius(tier) + 3) continue;
-          const body = this.add(tier,x,y);body.born = 30;
+          const body = this.add(tier,x,y);body.born = 30;slot++;
           body.angle = ((col * 7 + row * 3) % 9 - 4) * .08;
         }
       }
@@ -396,8 +416,9 @@ function drawMysteryCase(c, body) {
   c.strokeStyle='#d8b778';c.lineWidth=3;c.beginPath();c.arc(0,-6,9,Math.PI,0);c.stroke();
   c.fillStyle='#e8b05f';c.beginPath();c.roundRect(-13,-6,26,25,4);c.fill();
   c.fillStyle='#252a32';c.textAlign='center';c.font='bold 22px monospace';c.fillText('?',0,14);
-  for(let i=0;i<body.required;i++){
-    c.fillStyle=i<body.hits?'#ffd383':'#51525a';c.fillRect(-43+i*11,29,8,5);
+  for(let i=0;i<10;i++){
+    c.fillStyle='#51525a';c.fillRect(-43+i*9,29,7,5);
+    c.fillStyle='#ffd383';c.fillRect(-43+i*9,29,7*Math.max(0,Math.min(1,progress*10-i)),5);
   }
   c.fillStyle='#ffe2ad';c.font='bold 10px monospace';c.fillText(`${Math.round(progress*100)}%`,0,57);
   c.restore();
@@ -409,16 +430,16 @@ const canvas = $('game'), ctx = canvas.getContext('2d');
 let world, current, next, aim = 260, cooldown = 0, particles = [], floaters = [], paused = false, modal = '', highest = 0, won = false;
 let sound = false, audio, started = false;
 let bursts = [], aimSample = null, flick = 0, victoryDelay = 0;
-let missionIndex = 0, missionComplete = false, discovered = new Set();
+let missions = [], missionIndex = 0, missionComplete = false, discovered = new Set();
 let hudDirty = false, needsDraw = true;
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 let best = 0; try { best = Number(localStorage.getItem('case-drop-missions-best')) || 0; } catch {}
 $('best').textContent = best.toLocaleString('uk-UA');
-const randomTier = () => missionDrop(MISSIONS[missionIndex],world.bodies);
+const randomTier = () => missionDrop(missions[missionIndex],world.bodies);
 
 function updateMission() {
-  const mission=MISSIONS[missionIndex],target=LEVELS[mission.target];
-  $('mission-number').textContent=`${mission.number} / ${MISSIONS.length}`;
+  const mission=missions[missionIndex],target=LEVELS[mission.target];
+  $('mission-number').textContent=`${mission.number} / ${missions.length}`;
   $('mission-target').textContent=target.weapon;$('mission-finish').textContent=target.name;
   $('mission-hint').textContent=missionComplete?'✓ Ціль досягнуто!':`Від ${LEVELS[mission.dropTier].label} до цілі — ${mission.depth} послідовних покращень. Збирай пари однакових кейсів.`;
   $('mission-title').closest('section').classList.toggle('complete',missionComplete);
@@ -426,7 +447,7 @@ function updateMission() {
   drawWeapon(c,target.weaponTier,90,40,165,0,target.variant);
 }
 function checkMission(tier) {
-  if(!missionComplete&&missionReached(MISSIONS[missionIndex],tier)){
+  if(!missionComplete&&missionReached(missions[missionIndex],tier)){
     missionComplete=true;victoryDelay=65;updateMission();
   }
 }
@@ -506,7 +527,7 @@ function updateSkins() {
     if(!card.hidden)visible++;
     card.classList.toggle('reached',discovered.has(level.tier));
     card.classList.toggle('current',level.tier===highest);
-    card.querySelector('.skin-action').textContent=level.tier===MISSIONS[missionIndex].target?'◎ Ціль рівня':discovered.has(level.tier)?'✓ В арсеналі':'Об’єднай два попередні';
+    card.querySelector('.skin-action').textContent=level.tier===missions[missionIndex].target?'◎ Ціль рівня':discovered.has(level.tier)?'✓ В арсеналі':'Об’єднай два попередні';
   });
   $('skin-count').textContent=`${visible} рівнів`;
   const level=LEVELS[highest],upcoming=LEVELS[highest+1];
@@ -516,14 +537,14 @@ $('skin-filter').addEventListener('change',updateSkins);
 
 function renderChain() {
   const steps=$('upgrade-chain');steps.replaceChildren();
-  const mission=MISSIONS[missionIndex];
+  const mission=missions[missionIndex];
   const bestOnField=Math.max(mission.dropTier,...world.bodies.filter(b=>!b.mystery).map(b=>b.tier));
   const start=Math.min(bestOnField,mission.target-2);
   for(let tier=start;tier<start+3;tier++){
     const level=LEVELS[tier],item=document.createElement('li');
-    item.className='chain-step';item.classList.toggle('current',tier===MISSIONS[missionIndex].target);
-    if(tier===MISSIONS[missionIndex].target)item.setAttribute('aria-current','step');
-    item.innerHTML=`<span class="chain-stage">${tier===MISSIONS[missionIndex].target?'ЦІЛЬ РІВНЯ':tier<MISSIONS[missionIndex].target?'ОБ’ЄДНАЙ ДВА':'НАСТУПНИЙ СКІН'}</span><canvas width="140" height="60" aria-hidden="true"></canvas><strong>${level.weapon}</strong><span>${level.name}</span>`;
+    item.className='chain-step';item.classList.toggle('current',tier===missions[missionIndex].target);
+    if(tier===missions[missionIndex].target)item.setAttribute('aria-current','step');
+    item.innerHTML=`<span class="chain-stage">${tier===missions[missionIndex].target?'ЦІЛЬ РІВНЯ':tier<missions[missionIndex].target?'ОБ’ЄДНАЙ ДВА':'НАСТУПНИЙ СКІН'}</span><canvas width="140" height="60" aria-hidden="true"></canvas><strong>${level.weapon}</strong><span>${level.name}</span>`;
     drawWeapon(item.querySelector('canvas').getContext('2d'),level.weaponTier,70,30,125,0,level.variant);
     steps.append(item);
   }
@@ -557,13 +578,13 @@ function merged(e) {
 }
 function reset(advance = false) {
   const score=advance?world.score:0,merges=advance?world.merges:0;
-  if(advance)missionIndex++;else{missionIndex=0;discovered=new Set();}
-  const mission=MISSIONS[missionIndex];missionComplete=false;
+  if(advance)missionIndex++;else{missions=createMissions();missionIndex=0;discovered=new Set();}
+  const mission=missions[missionIndex];missionComplete=false;
   world=new World(520,630,merged,{mission,onMystery:mysteryChanged,mysteryRewards:mission.mysteryRewards});
   world.score=score;world.merges=merges;world.seedCases();
   for(const body of world.bodies)if(!body.mystery)discovered.add(body.tier);
   started=false;current=mission.dropTier;next=randomTier();cooldown=0;particles=[];floaters=[];bursts=[];highest=Math.max(...discovered);won=false;aim=260;aimSample=null;flick=0;victoryDelay=0;
-  $('mystery-count').textContent='0 / 8';$('mystery-progress').value=0;
+  $('mystery-count').textContent=`0 / ${MYSTERY_HITS}`;$('mystery-progress').max=MYSTERY_HITS;$('mystery-progress').value=0;
   $('mystery-hint').textContent='Вміст невідомий. Зливай кейси поруч — відкривай замок.';
   closeModal();updateScore();renderNext();updateArsenal();updateMission();
 }
@@ -598,11 +619,11 @@ function showModal(type) {
   needsDraw=true;
   modal=type;paused=true;$('overlay').hidden=false;$('modal-cancel').hidden=type!=='restart';
   const content={
-    help:['ПОЛЬОВИЙ ПОСІБНИК','Збирай свій арсенал','<p>Пройди 10 рівнів: на кожному збери зброю зі скіном, указаним у завданні. Початкова купа почне рухатися після першого кидка.</p><p>Рухай мишкою та клікай, щоб скинути кейс. На телефоні — наведи пальцем і відпусти. Два кейси з однаковою зброєю та скіном зливаються в наступне покращення.</p><p>До цілі потрібно пройти 4 покращення на рівнях 1–4, 5 на рівнях 5–8 і 6 на рівнях 9–10. Покращені кейси збирай на полі: черга не видає готові пари для перемоги.</p><p>Вісім злиттів поруч відкриють таємний кейс із бонусом. Не дай кейсам залишатися вище червоної лінії понад 2,5 секунди.</p><p class="modal-controls">Клавіатура: <kbd>←</kbd> <kbd>→</kbd> — рух, <kbd>Пробіл</kbd> — скинути.</p>','Погнали'],
+    help:['ПОЛЬОВИЙ ПОСІБНИК','Збирай свій арсенал','<p>Пройди 10 випадкових завдань: у кожній новій грі цілі та початкова купа змінюються. На кожному рівні збери зброю зі скіном, указаним у завданні. Початкова купа почне рухатися після першого кидка.</p><p>Рухай мишкою та клікай, щоб скинути кейс. На телефоні — наведи пальцем і відпусти. Два кейси з однаковою зброєю та скіном зливаються в наступне покращення.</p><p>До цілі потрібно пройти 4 покращення на рівнях 1–4, 5 на рівнях 5–8 і 6 на рівнях 9–10. Покращені кейси збирай на полі: черга не видає готові пари для перемоги.</p><p>30 ударів від злиттів поруч відкриють таємний кейс із бонусом. Не дай кейсам залишатися вище червоної лінії понад 2,5 секунди.</p><p class="modal-controls">Клавіатура: <kbd>←</kbd> <kbd>→</kbd> — рух, <kbd>Пробіл</kbd> — скинути.</p>','Погнали'],
     restart:['НОВИЙ РАУНД','Почати нову гру?','<p>Ти повернешся до першого рівня, а рахунок скинеться. Рекорд залишиться.</p>','Почати нову гру'],
-    level:['ЦІЛЬ ДОСЯГНУТО',`Рівень ${missionIndex+1} пройдено!`,`<p>Ти зібрав <strong>${LEVELS[MISSIONS[missionIndex].target].label}</strong>.</p><div class="modal-score">${world.score}</div>`,'Наступний рівень'],
+    level:['ЦІЛЬ ДОСЯГНУТО',`Рівень ${missionIndex+1} пройдено!`,`<p>Ти зібрав <strong>${LEVELS[missions[missionIndex].target].label}</strong>.</p><div class="modal-score">${world.score}</div>`,'Наступний рівень'],
     over:['РАУНД ЗАВЕРШЕНО','Арсенал заповнений',`<p>Твій результат</p><div class="modal-score">${world.score}</div><p>Відкрито кейсів: <strong>${world.merges}</strong><br>Найкраща зброя: <strong>${LEVELS[highest].label}</strong></p>`,'Ще один раунд'],
-    win:['★ ЛЕГЕНДАРНИЙ ДРОП','Золотий Karambit у твоїх руках!',`<p>Ти пройшов увесь шлях від Glock-18 до легенди. Продовжуй об’єднувати кейси й покращуй рекорд!</p><div class="modal-score">${world.score}</div>`,'Продовжити'],
+    win:['★ УСІ ЗАВДАННЯ ВИКОНАНО','10 перемог — арсенал зібрано!',`<p>Ти виконав усі випадкові завдання. Почни нову гру, щоб отримати нові цілі!</p><div class="modal-score">${world.score}</div>`,'Нова гра'],
   }[type];
   $('modal-eyebrow').textContent=content[0];$('modal-title').textContent=content[1];$('modal-content').innerHTML=content[2];$('modal-action').innerHTML=content[3]+' <span>↗</span>';
   $('modal-action').focus({preventScroll:true});
@@ -680,7 +701,7 @@ function frame(now) {
       particles=particles.filter(p=>p.life>0);floaters=floaters.filter(f=>f.life>0);
       accumulator-=1000/60;
       if(world.over&&!missionComplete){showModal('over');break;}
-      if(victoryDelay>0&&--victoryDelay===0){showModal(missionIndex===MISSIONS.length-1?'win':'level');break;}
+      if(victoryDelay>0&&--victoryDelay===0){showModal(missionIndex===missions.length-1?'win':'level');break;}
       if(paused)break;
     }
   }else accumulator=0;
