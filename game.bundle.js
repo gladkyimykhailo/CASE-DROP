@@ -93,6 +93,8 @@ class World {
   }
   add(tier, x, y = 48) {
     tier = Math.max(this.minimumTier, tier);
+    if (!Number.isFinite(x)) x = this.width / 2;
+    if (!Number.isFinite(y)) y = 48;
     const r = this.radius(tier);
     const body = { id: this.nextId++, tier, r, x: Math.max(r + 9, Math.min(this.width - r - 9, x)), y, vx: 0, vy: 0, omega: 0, age: 0, angle: 0, born: 0, merged: false };
     this.bodies.push(body); return body;
@@ -151,6 +153,11 @@ class World {
   step(dt = 1) {
     if (this.over) return;
     for (const b of this.bodies) {
+      // A single non-finite value would silently poison the whole pile
+      // (comparisons are false for NaN), so respawn broken bodies on top.
+      if (!Number.isFinite(b.x + b.y + b.vx + b.vy + b.omega + b.angle)) {
+        b.x = this.width / 2; b.y = 48; b.vx = 0; b.vy = 0; b.omega = 0; b.angle = 0;
+      }
       b.age += dt; b.born += dt; b.vy = Math.min(10, b.vy + .22 * dt);
       b.vx *= Math.pow(.999, dt); b.omega *= Math.pow(.999, dt);
       b.x += b.vx * dt; b.y += b.vy * dt;
@@ -570,6 +577,7 @@ function drop() {
 }
 function setAim(event) {
   const bounds=canvas.getBoundingClientRect(),x=(event.clientX-bounds.left)*520/bounds.width,time=performance.now();
+  if(!Number.isFinite(x))return;
   if(aimSample&&x!==aimSample.x){const elapsed=time-aimSample.time;flick=elapsed>0&&elapsed<120?Math.max(-3.5,Math.min(3.5,(x-aimSample.x)/elapsed*8)):0;}
   if(!aimSample||x!==aimSample.x)aimSample={x,time};
   aim=x;needsDraw=true;
@@ -664,7 +672,7 @@ function frame(now) {
     accumulator+=elapsed;
     while(accumulator>=1000/60){
       if(started||cooldown>0||particles.length||bursts.length||floaters.length)needsDraw=true;
-      if(started&&!missionComplete)world.step();cooldown=Math.max(0,cooldown-1);
+      if(started)world.step();cooldown=Math.max(0,cooldown-1);
       for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vy+=.065;p.life-=p.shard?.025:.03;}
       for(const f of floaters){f.y-=.65;f.life-=.018;}
       for(const burst of bursts)burst.age++;
