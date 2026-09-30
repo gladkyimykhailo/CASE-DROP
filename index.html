@@ -21,11 +21,12 @@
         <div class="tip"><span>✦</span><p><strong>Два однакових — один кращий.</strong> Однакова зброя й скін — наступне покращення.</p></div>
         <button id="restart" class="secondary-button"><span>↻</span> Нова гра</button>
       </aside>
-      <section class="arena-panel" aria-label="Ігрове поле">
+      <div class="play-column"><section class="arena-panel" aria-label="Ігрове поле">
         <div class="arena-top"><span><i class="live-dot"></i> ЗОНА СКИДАННЯ</span><span id="status">ГОТОВИЙ ДО ДРОПУ</span></div>
         <div class="canvas-wrap"><canvas id="game" width="520" height="630" tabindex="0" aria-label="Ігрове поле. Стрілками обирайте позицію, пробілом скидайте кейс."></canvas><div class="arena-watermark">CASE<br><span>DROP</span></div><div class="danger-label">МЕЖА ЗАПОВНЕННЯ</div><div id="overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden><div class="overlay-card"><span class="eyebrow" id="modal-eyebrow">ПОЛЬОВИЙ ПОСІБНИК</span><h2 id="modal-title">Збирай свій арсенал</h2><div id="modal-content"></div><button id="modal-action" class="primary-button">Погнали <span>↗</span></button><button id="modal-cancel" class="text-button" hidden>Продовжити гру</button></div></div></div>
         <div class="arena-bottom"><span><kbd>↔</kbd> Наведи</span><span><kbd>↵</kbd> Клікни — скинь</span><button id="sound" aria-label="Увімкнути звук" title="Увімкнути звук">♫<span class="sound-slash">/</span></button></div>
       </section>
+      <section class="upgrade-panel panel" aria-labelledby="chain-title"><div class="label"><span id="chain-title">ЛАНЦЮЖОК ПОКРАЩЕНЬ</span><span id="chain-progress">1 / 110</span></div><ol id="upgrade-chain" class="upgrade-chain"></ol><p>Два однакові кейси → наступна ланка</p></section></div>
       <aside class="right-panel"><section class="panel arsenal"><div class="label">ШЛЯХ ПОКРАЩЕНЬ <span>110</span></div><p class="panel-description">Спочатку скіни, потім наступна зброя.</p><ol id="weapon-list"></ol><div class="legend-note"><span>✧</span> 100 скінів — відкривай по черзі</div></section><div class="field-note"><span>ПРАВИЛО № 01</span><p>Не дай кейсам<br>дістатися червоної лінії.</p><div class="mini-line"></div></div></aside>
     </div>
     <section class="skin-catalog panel" aria-labelledby="skin-title">
