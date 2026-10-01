@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#111313">
   <title>Case Drop</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=914ad65d293c">
 </head>
 <body>
   <header class="header">
@@ -18,11 +18,20 @@
       <button type="button" data-mode="missions" aria-pressed="true"><span>01</span> Завдання</button>
       <button type="button" data-mode="classic" aria-pressed="false"><span>02</span> Класичний</button>
     </div>
-    <p id="mode-note" class="mode-note">Перемикання починає новий раунд. Рекорд у кожного режиму свій.</p>
+    <div class="difficulty-picker">
+      <span class="label" id="difficulty-label">СКЛАДНІСТЬ</span>
+      <div class="difficulty-switch" role="group" aria-labelledby="difficulty-label" aria-describedby="difficulty-note">
+        <button type="button" data-difficulty="easy" aria-pressed="false">Easy <span>Легко</span></button>
+        <button type="button" data-difficulty="medium" aria-pressed="true">Medium <span>Середньо</span></button>
+        <button type="button" data-difficulty="hard" aria-pressed="false">Hard <span>Складно</span></button>
+      </div>
+      <p id="difficulty-note" aria-live="polite"></p>
+    </div>
+    <p id="mode-note" class="mode-note">Обери режим і складність та грай. Перемикання починає новий раунд. Кожна комбінація має свій рекорд.</p>
     <div class="game-layout">
       <aside class="left-panel">
         <section class="panel score-panel"><div class="label">ТВІЙ РАХУНОК <span class="tiny-icon">↗</span></div><div id="score" class="score" aria-live="polite">0000</div><div class="record"><span>♜ Рекорд</span><strong id="best">0</strong></div><div class="score-line"></div><div class="session-stat"><span>Відкрито кейсів</span><strong id="merges">0</strong></div></section>
-        <section class="panel next-panel"><div class="label">НАСТУПНИЙ КЕЙС <span>02</span></div><div class="next-art"><canvas id="next" width="240" height="170" aria-label="Наступна зброя"></canvas></div><div id="next-name" class="next-name">Glock-18</div><div id="next-rarity" class="rarity">Без скіна</div></section>
+        <section class="panel next-panel"><div class="label">НАСТУПНИЙ КЕЙС <span>02</span></div><div class="next-art"><canvas id="next" width="240" height="170" aria-label="Наступна зброя"></canvas></div><div id="next-name" class="next-name">Glock-18</div><div id="next-rarity" class="rarity">Без скіна</div><div id="next-class" class="next-class">ШИРОКИЙ ВЖИТОК</div><details class="drop-chances"><summary>Шанси нових кейсів</summary><ul id="drop-odds"></ul><p>Серед доступних за прогресом кейсів. Рідкісніша зброя та кращий скін мають менший шанс. Таємний кейс має окремий набір нагород.</p></details></section>
         <div class="tip"><span>✦</span><p><strong>Два однакових — один кращий.</strong> Однакова зброя й скін — наступне покращення.</p></div>
         <button id="restart" class="secondary-button"><span>↻</span> Нова гра</button>
       </aside>
@@ -36,9 +45,9 @@
         <p id="mystery-hint" aria-live="polite">Зливай кейси поруч — кожен вибух відкриває замок.</p>
       </section>
       <section class="arena-panel" aria-label="Ігрове поле">
-        <div class="arena-top"><span><i class="live-dot"></i> ЗОНА СКИДАННЯ</span><span id="status">ГОТОВИЙ ДО ДРОПУ</span></div>
-        <div class="canvas-wrap"><canvas id="game" width="520" height="630" tabindex="0" aria-label="Ігрове поле. Стрілками обирайте позицію, пробілом скидайте кейс."></canvas><div class="arena-watermark">CASE<br><span>DROP</span></div><div class="danger-label">МЕЖА ЗАПОВНЕННЯ</div><div id="overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden><div class="overlay-card"><span class="eyebrow" id="modal-eyebrow">ПОЛЬОВИЙ ПОСІБНИК</span><h2 id="modal-title">Збирай свій арсенал</h2><div id="modal-content"></div><button id="modal-action" class="primary-button">Погнали <span>↗</span></button><button id="modal-cancel" class="text-button" hidden>Продовжити гру</button></div></div></div>
-        <div class="arena-bottom"><span><kbd>↔</kbd> Наведи</span><span><kbd>↵</kbd> Клікни — скинь</span><button id="sound" aria-label="Увімкнути звук" title="Увімкнути звук">♫<span class="sound-slash">/</span></button></div>
+        <div class="arena-top"><span><i class="live-dot"></i> ЗОНА СКИДАННЯ</span><span id="status">АВТОДРОП — НАВОДЬ</span></div>
+        <div class="canvas-wrap"><canvas id="game" width="520" height="630" tabindex="0" aria-label="Ігрове поле. Кейси падають автоматично. Обирайте позицію мишкою, пальцем або стрілками ліворуч і праворуч."></canvas><div class="arena-watermark">CASE<br><span>DROP</span></div><div class="danger-label">МЕЖА ЗАПОВНЕННЯ</div><div id="overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden><div class="overlay-card"><span class="eyebrow" id="modal-eyebrow">ПОЛЬОВИЙ ПОСІБНИК</span><h2 id="modal-title">Збирай свій арсенал</h2><div id="modal-content"></div><button id="modal-action" class="primary-button">Погнали <span>↗</span></button><button id="modal-cancel" class="text-button" hidden>Продовжити гру</button></div></div></div>
+        <div class="arena-bottom"><span><kbd>↔</kbd> Води</span><span><kbd>↓</kbd> Автодроп</span><button id="sound" aria-label="Увімкнути звук" title="Увімкнути звук">♫<span class="sound-slash">/</span></button></div>
       </section>
       <section class="upgrade-panel panel" aria-labelledby="chain-title"><div class="label"><span id="chain-title">ЛАНЦЮЖОК ПОКРАЩЕНЬ</span><span id="chain-progress">1 / 110</span></div><ol id="upgrade-chain" class="upgrade-chain"></ol><p>Два однакові кейси → наступна ланка</p></section></div>
       <aside class="right-panel"><section class="panel arsenal"><div class="label">ШЛЯХ ПОКРАЩЕНЬ <span>110</span></div><p class="panel-description">Спочатку скіни, потім наступна зброя.</p><ol id="weapon-list"></ol><div class="legend-note"><span>✧</span> 100 скінів — відкривай по черзі</div></section><div class="field-note"><span>ПРАВИЛО № 01</span><p>Не дай кейсам<br>дістатися червоної лінії.</p><div class="mini-line"></div></div></aside>
@@ -50,6 +59,6 @@
     </section>
     <footer><span>ЖОДНОГО РИЗИКУ. ТІЛЬКИ СКІЛ.</span><span>Фанатська мінігра · Не пов’язана з Valve</span><span class="footer-mark">GL & HF <span>↗</span></span></footer>
   </main>
-  <script src="game.bundle.js"></script>
+  <script src="game.bundle.js?v=6729e3392080"></script>
 </body>
 </html>
