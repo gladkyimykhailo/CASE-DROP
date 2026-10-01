@@ -433,11 +433,28 @@ let bursts = [], aimSample = null, flick = 0, victoryDelay = 0;
 let missions = [], missionIndex = 0, missionComplete = false, discovered = new Set();
 let hudDirty = false, needsDraw = true;
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-let best = 0; try { best = Number(localStorage.getItem('case-drop-missions-best')) || 0; } catch {}
-$('best').textContent = best.toLocaleString('uk-UA');
-const randomTier = () => missionDrop(missions[missionIndex],world.bodies);
+let mode = 'missions', best = 0;
+try { if(localStorage.getItem('case-drop-mode')==='classic')mode='classic'; } catch {}
+const bestKey = () => `case-drop-${mode}-best`;
+const activeMission = () => mode==='missions'?missions[missionIndex]:null;
+const randomTier = () => mode==='missions'?missionDrop(activeMission(),world.bodies):randomDropTier(highest);
+
+function updateMode() {
+  document.querySelectorAll('[data-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.mode===mode)));
+  $('mission-panel').hidden=mode==='classic';
+  $('mode-description').textContent=mode==='classic'?'Повне поле Glock. Об’єднуй кейси без завдань.':'Різна зброя. Нові цілі. Таємний кейс.';
+  best=0;try{best=Number(localStorage.getItem(bestKey()))||0;}catch{}
+  $('best').textContent=best.toLocaleString('uk-UA');
+}
+document.querySelectorAll('[data-mode]').forEach(button=>button.addEventListener('click',()=>{
+  if(button.dataset.mode===mode)return;
+  mode=button.dataset.mode;
+  try{localStorage.setItem('case-drop-mode',mode);}catch{}
+  reset();
+}));
 
 function updateMission() {
+  if(mode!=='missions')return;
   const mission=missions[missionIndex],target=LEVELS[mission.target];
   $('mission-number').textContent=`${mission.number} / ${missions.length}`;
   $('mission-target').textContent=target.weapon;$('mission-finish').textContent=target.name;
@@ -447,7 +464,7 @@ function updateMission() {
   drawWeapon(c,target.weaponTier,90,40,165,0,target.variant);
 }
 function checkMission(tier) {
-  if(!missionComplete&&missionReached(missions[missionIndex],tier)){
+  if(mode==='missions'&&!missionComplete&&missionReached(activeMission(),tier)){
     missionComplete=true;victoryDelay=65;updateMission();
   }
 }
@@ -527,7 +544,7 @@ function updateSkins() {
     if(!card.hidden)visible++;
     card.classList.toggle('reached',discovered.has(level.tier));
     card.classList.toggle('current',level.tier===highest);
-    card.querySelector('.skin-action').textContent=level.tier===missions[missionIndex].target?'◎ Ціль рівня':discovered.has(level.tier)?'✓ В арсеналі':'Об’єднай два попередні';
+    card.querySelector('.skin-action').textContent=level.tier===activeMission()?.target?'◎ Ціль рівня':discovered.has(level.tier)?'✓ В арсеналі':'Об’єднай два попередні';
   });
   $('skin-count').textContent=`${visible} рівнів`;
   const level=LEVELS[highest],upcoming=LEVELS[highest+1];
@@ -537,14 +554,16 @@ $('skin-filter').addEventListener('change',updateSkins);
 
 function renderChain() {
   const steps=$('upgrade-chain');steps.replaceChildren();
-  const mission=missions[missionIndex];
-  const bestOnField=Math.max(mission.dropTier,...world.bodies.filter(b=>!b.mystery).map(b=>b.tier));
-  const start=Math.min(bestOnField,mission.target-2);
+  const mission=activeMission();
+  const bestOnField=Math.max(mission?.dropTier??highest,...world.bodies.filter(b=>!b.mystery).map(b=>b.tier));
+  const start=Math.min(bestOnField,mission?mission.target-2:LEVELS.length-3);
+  const highlighted=mission?mission.target:highest;
   for(let tier=start;tier<start+3;tier++){
     const level=LEVELS[tier],item=document.createElement('li');
-    item.className='chain-step';item.classList.toggle('current',tier===missions[missionIndex].target);
-    if(tier===missions[missionIndex].target)item.setAttribute('aria-current','step');
-    item.innerHTML=`<span class="chain-stage">${tier===missions[missionIndex].target?'ЦІЛЬ РІВНЯ':tier<missions[missionIndex].target?'ОБ’ЄДНАЙ ДВА':'НАСТУПНИЙ СКІН'}</span><canvas width="140" height="60" aria-hidden="true"></canvas><strong>${level.weapon}</strong><span>${level.name}</span>`;
+    item.className='chain-step';item.classList.toggle('current',tier===highlighted);
+    if(tier===highlighted)item.setAttribute('aria-current','step');
+    const stage=mission?(tier===mission.target?'ЦІЛЬ РІВНЯ':'ОБ’ЄДНАЙ ДВА'):(tier===highest?'ТВІЙ РІВЕНЬ':tier<highest?'В АРСЕНАЛІ':'НАСТУПНИЙ СКІН');
+    item.innerHTML=`<span class="chain-stage">${stage}</span><canvas width="140" height="60" aria-hidden="true"></canvas><strong>${level.weapon}</strong><span>${level.name}</span>`;
     drawWeapon(item.querySelector('canvas').getContext('2d'),level.weaponTier,70,30,125,0,level.variant);
     steps.append(item);
   }
@@ -553,7 +572,7 @@ function renderChain() {
 
 function updateScore() {
   $('score').textContent=String(world.score).padStart(4,'0');$('merges').textContent=world.merges;
-  if(world.score>best){best=world.score;$('best').textContent=best.toLocaleString('uk-UA');try{localStorage.setItem('case-drop-missions-best',String(best));}catch{}}
+  if(world.score>best){best=world.score;$('best').textContent=best.toLocaleString('uk-UA');try{localStorage.setItem(bestKey(),String(best));}catch{}}
 }
 function merged(e) {
   for(const body of e.retired){
@@ -577,16 +596,17 @@ function merged(e) {
   checkMission(e.tier);
 }
 function reset(advance = false) {
+  advance=advance&&mode==='missions';
   const score=advance?world.score:0,merges=advance?world.merges:0;
-  if(advance)missionIndex++;else{missions=createMissions();missionIndex=0;discovered=new Set();}
-  const mission=missions[missionIndex];missionComplete=false;
-  world=new World(520,630,merged,{mission,onMystery:mysteryChanged,mysteryRewards:mission.mysteryRewards});
+  if(advance)missionIndex++;else{missions=mode==='missions'?createMissions():[];missionIndex=0;discovered=new Set();}
+  const mission=activeMission();missionComplete=false;
+  world=new World(520,630,merged,mission?{mission,onMystery:mysteryChanged,mysteryRewards:mission.mysteryRewards}:{});
   world.score=score;world.merges=merges;world.seedCases();
   for(const body of world.bodies)if(!body.mystery)discovered.add(body.tier);
-  started=false;current=mission.dropTier;next=randomTier();cooldown=0;particles=[];floaters=[];bursts=[];highest=Math.max(...discovered);won=false;aim=260;aimSample=null;flick=0;victoryDelay=0;
+  highest=Math.max(...discovered);started=false;current=mission?.dropTier??0;next=randomTier();cooldown=0;particles=[];floaters=[];bursts=[];won=false;aim=260;aimSample=null;flick=0;victoryDelay=0;hudDirty=false;accumulator=0;
   $('mystery-count').textContent=`0 / ${MYSTERY_HITS}`;$('mystery-progress').max=MYSTERY_HITS;$('mystery-progress').value=0;
   $('mystery-hint').textContent='Вміст невідомий. Зливай кейси поруч — відкривай замок.';
-  closeModal();updateScore();renderNext();updateArsenal();updateMission();
+  updateMode();closeModal();updateScore();renderNext();updateArsenal();updateMission();
 }
 function drop() {
   if(paused||world.over||cooldown>0||victoryDelay>0)return;
@@ -619,9 +639,9 @@ function showModal(type) {
   needsDraw=true;
   modal=type;paused=true;$('overlay').hidden=false;$('modal-cancel').hidden=type!=='restart';
   const content={
-    help:['ПОЛЬОВИЙ ПОСІБНИК','Збирай свій арсенал','<p>Пройди 10 випадкових завдань: у кожній новій грі цілі та початкова купа змінюються. На кожному рівні збери зброю зі скіном, указаним у завданні. Початкова купа почне рухатися після першого кидка.</p><p>Рухай мишкою та клікай, щоб скинути кейс. На телефоні — наведи пальцем і відпусти. Два кейси з однаковою зброєю та скіном зливаються в наступне покращення.</p><p>До цілі потрібно пройти 4 покращення на рівнях 1–4, 5 на рівнях 5–8 і 6 на рівнях 9–10. Покращені кейси збирай на полі: черга не видає готові пари для перемоги.</p><p>30 ударів від злиттів поруч відкриють таємний кейс із бонусом. Не дай кейсам залишатися вище червоної лінії понад 2,5 секунди.</p><p class="modal-controls">Клавіатура: <kbd>←</kbd> <kbd>→</kbd> — рух, <kbd>Пробіл</kbd> — скинути.</p>','Погнали'],
-    restart:['НОВИЙ РАУНД','Почати нову гру?','<p>Ти повернешся до першого рівня, а рахунок скинеться. Рекорд залишиться.</p>','Почати нову гру'],
-    level:['ЦІЛЬ ДОСЯГНУТО',`Рівень ${missionIndex+1} пройдено!`,`<p>Ти зібрав <strong>${LEVELS[missions[missionIndex].target].label}</strong>.</p><div class="modal-score">${world.score}</div>`,'Наступний рівень'],
+    help:['ПОЛЬОВИЙ ПОСІБНИК','Збирай свій арсенал',mode==='classic'?'<p>На полі 67 кейсів зі звичайним Glock-18. Кинь перший кейс, щоб купа почала рухатися.</p><p>Об’єднуй однакову зброю з однаковим скіном: два кейси дають наступне покращення. Після десяти скінів відкривається наступна зброя. Нові кейси стають кращими разом із твоїм прогресом.</p><p>Грай без завдань і збирай очки. Кейси, які відстали від найкращого рівня на 10 покращень, зникають. Два фінальні золоті Karambit звільняють місце й дають очки — можна грати далі.</p><p>Рухай мишкою та клікай, на телефоні наведи й відпусти. Клавіатура: стрілки та пробіл. Не дай кейсам залишатися над червоною лінією понад 2,5 секунди.</p>':'<p>Пройди 10 випадкових завдань: у кожній новій грі цілі та початкова купа змінюються. На кожному рівні збери зброю зі скіном, указаним у завданні. Початкова купа почне рухатися після першого кидка.</p><p>Рухай мишкою та клікай, щоб скинути кейс. На телефоні — наведи пальцем і відпусти. Два кейси з однаковою зброєю та скіном зливаються в наступне покращення.</p><p>До цілі потрібно пройти 4 покращення на рівнях 1–4, 5 на рівнях 5–8 і 6 на рівнях 9–10. Покращені кейси збирай на полі: черга не видає готові пари для перемоги.</p><p>30 ударів від злиттів поруч відкриють таємний кейс із бонусом. Не дай кейсам залишатися вище червоної лінії понад 2,5 секунди.</p><p class="modal-controls">Клавіатура: <kbd>←</kbd> <kbd>→</kbd> — рух, <kbd>Пробіл</kbd> — скинути.</p>','Погнали'],
+    restart:['НОВИЙ РАУНД','Почати нову гру?',mode==='classic'?'<p>Поле знову заповниться 67 кейсами Glock-18, а рахунок скинеться. Рекорд залишиться.</p>':'<p>Ти повернешся до першого рівня, а рахунок скинеться. Рекорд залишиться.</p>','Почати нову гру'],
+    level:['ЦІЛЬ ДОСЯГНУТО',`Рівень ${missionIndex+1} пройдено!`,`<p>Ти зібрав <strong>${activeMission()?LEVELS[activeMission().target].label:''}</strong>.</p><div class="modal-score">${world.score}</div>`,'Наступний рівень'],
     over:['РАУНД ЗАВЕРШЕНО','Арсенал заповнений',`<p>Твій результат</p><div class="modal-score">${world.score}</div><p>Відкрито кейсів: <strong>${world.merges}</strong><br>Найкраща зброя: <strong>${LEVELS[highest].label}</strong></p>`,'Ще один раунд'],
     win:['★ УСІ ЗАВДАННЯ ВИКОНАНО','10 перемог — арсенал зібрано!',`<p>Ти виконав усі випадкові завдання. Почни нову гру, щоб отримати нові цілі!</p><div class="modal-score">${world.score}</div>`,'Нова гра'],
   }[type];
