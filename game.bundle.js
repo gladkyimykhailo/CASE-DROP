@@ -875,7 +875,7 @@ function moveSecret() {
     secretCorner=null;
     let point={x:bounds.left+Math.random()*(bounds.right-bounds.left),y:bounds.top+Math.random()*(bounds.bottom-bounds.top)};
     // Make every teleport noticeable even if randomness picks the old position.
-    if(Math.hypot(point.x-current.x,point.y-current.y)<44){
+    if(Math.hypot(point.x-current.x,point.y-current.y)<Math.max(current.width,current.height)){
       point=corners.reduce((farther,next)=>Math.hypot(next.x-current.x,next.y-current.y)>Math.hypot(farther.x-current.x,farther.y-current.y)?next:farther);
     }
     placeSecret(point);

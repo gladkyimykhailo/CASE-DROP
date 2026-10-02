@@ -25,10 +25,17 @@
 #weapon-list .weapon-row.current{background:#f6a3430d;border-radius:4px}
 @media(max-width:780px){#weapon-list{max-height:280px;grid-template-columns:repeat(5,minmax(0,1fr))}}
 
-.golden-secret{position:fixed;left:0;bottom:0;width:44px;height:44px;z-index:10;display:grid;place-items:center;padding:0;border:0;background:transparent;color:#59614f;font-size:12px;opacity:.35}
-.golden-secret:hover,.golden-secret:focus-visible,.golden-secret[aria-pressed="true"]{opacity:1;color:#efc762}
-.golden-secret:focus-visible{outline-offset:-4px}
-.secret-notice{position:fixed;left:max(12px,env(safe-area-inset-left));bottom:calc(max(12px,env(safe-area-inset-bottom)) + 52px);z-index:10;max-width:min(320px,calc(100vw - 24px));padding:12px 15px;border:1px solid #806c39;border-radius:6px;background:#25251b;color:#ffe19a;font-size:12px;line-height:1.6;pointer-events:none;box-shadow:0 8px 24px #0005}
+:root{--secret-size:88px}
+.golden-secret{position:fixed;left:0;bottom:0;width:var(--secret-size);height:var(--secret-size);z-index:10;display:grid;place-content:center;gap:2px;padding:0;border:3px solid #fff5cb;border-radius:22px;background:linear-gradient(135deg,#fff69a,#ffcf20 50%,#ff9217);color:#302000;font-size:50px;line-height:1;opacity:1;box-shadow:0 0 16px #ffd52bee,0 0 38px #ffac1680;animation:secret-beacon 2s ease-in-out infinite}
+.golden-secret::after{content:'СЕКРЕТ';font:bold 10px Arial,Helvetica,sans-serif;letter-spacing:1px}
+.golden-secret:hover,.golden-secret:focus-visible{filter:brightness(1.15);border-color:#fff}
+.golden-secret:focus-visible{outline:3px solid #fff;outline-offset:-7px}
+.golden-secret[aria-pressed="true"]{background:linear-gradient(135deg,#fffbd4,#ffd84c 55%,#f6a343)}
+.golden-secret[aria-pressed="true"]::after{content:'АКТИВНО'}
+@keyframes secret-beacon{50%{box-shadow:0 0 24px #fff08aff,0 0 58px #ffc126bb,0 0 90px #ff9d1644}}
+@media(max-width:500px){:root{--secret-size:72px}.golden-secret{font-size:38px;border-radius:18px}}
+@media(prefers-reduced-motion:reduce){.golden-secret{animation:none}}
+.secret-notice{position:fixed;left:max(12px,env(safe-area-inset-left));bottom:calc(max(12px,env(safe-area-inset-bottom)) + var(--secret-size) + 8px);z-index:10;max-width:min(320px,calc(100vw - 24px));padding:12px 15px;border:1px solid #806c39;border-radius:6px;background:#25251b;color:#ffe19a;font-size:12px;line-height:1.6;pointer-events:none;box-shadow:0 8px 24px #0005}
 .secret-notice:empty{display:none}
 
 /* Compact layout after removing the tutorial and gameplay instructions. */
