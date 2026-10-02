@@ -63,6 +63,11 @@ const WEAPONS = [
   { name: 'Ursus Knife', type: 'ursus', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
   { name: 'Navaja Knife', type: 'navaja', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
   { name: 'Talon Knife', type: 'talon', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'Flip Knife', type: 'flip', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'Gut Knife', type: 'gut', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'Stiletto Knife', type: 'stiletto', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'Skeleton Knife', type: 'skeleton', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'Survival Knife', type: 'survival', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
   { name: 'Karambit', type: 'knife', model: 9, rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
 ];
 
@@ -78,6 +83,9 @@ const FINISHES = [
   { name: 'Полум’я', base: '#d94c32', ink: '#ffd16b', pattern: 'flame' },
   { name: 'Неон', base: '#713dde', ink: '#62ffd2', pattern: 'circuit' },
   { name: 'Космос', base: '#403569', ink: '#e0beff', pattern: 'stars' },
+  { name: 'Рубін', base: '#a51d48', ink: '#ff96b0', pattern: 'facets' },
+  { name: 'Смарагд', base: '#117c59', ink: '#7affc4', pattern: 'scales' },
+  { name: 'Блискавка', base: '#33378d', ink: '#fff18c', pattern: 'lightning' },
   { name: 'Золотий', base: '#d6a63e', ink: '#fff0ad', pattern: 'bands' },
 ];
 
@@ -85,7 +93,7 @@ const SKINS = WEAPONS.flatMap((weapon, tier) => FINISHES.map((finish, variant) =
   ...finish, id: `${weapon.type}-${variant}`, tier, variant, weapon: weapon.name,
 })));
 
-// Each weapon begins unpainted, then advances through its ten skins.
+// Each weapon begins unpainted, then advances through all thirteen skins.
 const LEVELS = WEAPONS.flatMap((weapon, weaponTier) => [
   { name: 'Без скіна', base: '#a5b5bc', variant: -1 },
   ...FINISHES.map((finish, variant) => ({ ...finish, variant })),
@@ -362,6 +370,11 @@ const bladeProfiles = {
   ursus: [[16,21],[76,21],[82,30],[74,38],[30,38],[15,30]],
   navaja: [[26,24],[64,19],[81,27],[76,35],[47,39],[33,34]],
   talon: [[28,12],[36,29],[51,34],[69,25],[82,31],[70,45],[48,49],[29,37],[23,23]],
+  flip: [[16,18],[42,22],[75,22],[81,29],[72,38],[40,38],[25,30]],
+  gut: [[13,17],[38,19],[58,15],[54,24],[65,24],[75,20],[82,29],[74,42],[36,40]],
+  stiletto: [[6,28],[67,24],[80,27],[80,32],[67,35]],
+  skeleton: [[12,27],[53,16],[76,22],[84,29],[74,36],[42,36]],
+  survival: [[10,20],[31,20],[36,16],[42,23],[74,20],[82,29],[74,39],[29,39]],
 };
 function drawBlade(c,w) {
   const blade=bladeProfiles[w.type];
@@ -376,7 +389,11 @@ function drawBlade(c,w) {
   poly(c,blade,w.color);
   c.strokeStyle='#e4e9dd';c.lineWidth=2;c.beginPath();
   blade.slice(-3).forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.stroke();
-  if(w.type==='talon'){
+  if(w.type==='skeleton'){
+    c.strokeStyle='#aab1ad';c.lineWidth=6;c.beginPath();c.arc(87,29,10,0,Math.PI*2);c.stroke();
+    poly(c,[[98,24],[130,20],[134,28],[130,37],[99,34]],'#68766e');
+    rect(c,107,27,18,4,'#222b27');
+  }else if(w.type==='talon'){
     poly(c,[[75,31],[94,15],[103,22],[84,44]],'#b7b6a0');
     c.strokeStyle='#d0d2c8';c.lineWidth=5;c.beginPath();c.arc(99,16,8,0,Math.PI*2);c.stroke();
   }else if(w.type==='butterfly'){
@@ -535,6 +552,9 @@ function drawWeapon(c, tier, x, y, width, angle = 0, variant = -1) {
         case 'stripes': poly(p, [[a,0],[a+9,0],[a+24,60],[a+20,35]],finish.ink);break;
         case 'petals': for(let j=0;j<5;j++){p.beginPath();p.ellipse(a+Math.cos(j*1.26)*4,b+Math.sin(j*1.26)*4,3,2,j*1.26,0,Math.PI*2);p.fill();}break;
         case 'stars': p.fillRect(a,b,2,2);if(i%3===0){p.fillRect(a-2,b,6,1);p.fillRect(a,b-2,1,6);}break;
+        case 'facets': poly(p,[[a,b],[a+11,b-9],[a+19,b+3],[a+7,b+13]],finish.ink);break;
+        case 'scales': p.arc(a,b,9,0,Math.PI);p.stroke();p.beginPath();p.arc(a+5,b+12,9,0,Math.PI);p.stroke();break;
+        case 'lightning': poly(p,[[a+10,0],[a,27],[a+9,25],[a+2,60],[a+24,19],[a+13,22],[a+23,0]],finish.ink);break;
       }
     }
     p.globalAlpha = .25;
