@@ -575,26 +575,31 @@ function renderNext() {
     item.append(label,chance);odds.append(item);
   }
 }
-function updateArsenal() {
-  // Show the current level in context, including the next few upgrades.
-  const start=Math.max(world.minimumTier,Math.min(highest-2,LEVELS.length-10));
-  [...$('weapon-list').children].forEach((el,i)=>{
-    const level=LEVELS[start+i];
-    el.classList.toggle('current',level.tier===highest);
-    el.classList.toggle('locked',!discovered.has(level.tier));
-    el.querySelector('.weapon-name').textContent=level.weapon;
-    el.querySelector('.weapon-tier').textContent=level.name;
-    el.querySelector('.weapon-tier').style.color=level.color;
-    el.querySelector('.weapon-number').textContent=String(level.tier+1).padStart(2,'0');
-    const c=el.querySelector('canvas').getContext('2d');c.clearRect(0,0,140,74);
-    drawWeapon(c,level.weaponTier,70,37,126,0,level.variant);
+let arsenalTier = null;
+function updateArsenal(resetScroll = false) {
+  const list=$('weapon-list'),mission=activeMission();
+  const tier=mission?Math.max(mission.dropTier,...world.bodies.filter(body=>!body.mystery).map(body=>body.tier)):highest;
+  [...list.children].forEach((el,i)=>{
+    el.classList.toggle('current',i===tier);
+    el.classList.toggle('locked',i!==tier&&!discovered.has(i));
+    if(i===tier)el.setAttribute('aria-current','step');
+    else el.removeAttribute('aria-current');
   });
+  // Follow progress without pulling the list back during manual browsing.
+  if(resetScroll||tier!==arsenalTier){
+    const row=list.children[tier];
+    const top=list.scrollTop+row.getBoundingClientRect().top-list.getBoundingClientRect().top;
+    list.scrollTo({top:Math.max(0,top-(list.clientHeight-row.offsetHeight)/2),behavior:resetScroll||reducedMotion?'instant':'smooth'});
+  }
+  arsenalTier=tier;
   updateSkins();
   renderChain();
 }
-for(let i=0;i<10;i++){
+for(const level of LEVELS){
   const li=document.createElement('li');li.className='weapon-row';
-  li.innerHTML='<canvas width="140" height="74" aria-hidden="true"></canvas><div class="weapon-info"><div class="weapon-name"></div><div class="weapon-tier"></div></div><span class="weapon-number"></span>';
+  li.innerHTML=`<canvas width="140" height="74" aria-hidden="true"></canvas><div class="weapon-info"><div class="weapon-name">${level.weapon}</div><div class="weapon-tier">${level.name}</div></div><span class="weapon-number">${String(level.tier+1).padStart(2,'0')}</span>`;
+  li.querySelector('.weapon-tier').style.color=level.color;
+  drawWeapon(li.querySelector('canvas').getContext('2d'),level.weaponTier,70,37,126,0,level.variant);
   $('weapon-list').append(li);
 }
 const skinCards = [];
@@ -680,7 +685,7 @@ function reset(advance = false) {
   const mysteryHits=difficultySettings(difficulty).mysteryHits;
   $('mystery-count').textContent=`0 / ${mysteryHits}`;$('mystery-progress').max=mysteryHits;$('mystery-progress').value=0;
   $('mystery-hint').textContent='Вміст невідомий. Зливай кейси поруч — відкривай замок.';
-  updateMode();closeModal();updateScore();renderNext();updateArsenal();updateMission();
+  updateMode();closeModal();updateScore();renderNext();updateArsenal(true);updateMission();
   drop();
 }
 function drop() {
