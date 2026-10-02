@@ -836,11 +836,12 @@ function reset(advance = false) {
   world=new World(520,630,merged,{difficulty,...(mission?{mission,onMystery:mysteryChanged,mysteryRewards:mission.mysteryRewards}:{})});
   world.score=score;world.merges=merges;world.seedCases();
   for(const body of world.bodies)if(!body.mystery)discovered.add(body.tier);
-  highest=Math.max(...discovered);current=randomTier();next=randomTier();cooldown=0;particles=[];floaters=[];bursts=[];won=false;aim=260;aimSample=null;flick=0;victoryDelay=0;hudDirty=false;accumulator=0;
+  highest=Math.max(...discovered);current=randomTier();next=randomTier();cooldown=0;particles=[];floaters=[];bursts=[];won=false;aim=260;aimSample=null;flick=0;victoryDelay=0;hudDirty=false;accumulator=0;playSeconds=0;
   const mysteryHits=difficultySettings(difficulty).mysteryHits;
   $('mystery-count').textContent=`0 / ${mysteryHits}`;$('mystery-progress').max=mysteryHits;$('mystery-progress').value=0;
   $('mystery-hint').textContent='';
   updateMode();closeModal();updateScore();renderNext();updateArsenal(true);updateMission();
+  updateClocks(true);
   drop();
 }
 function drop() {
@@ -986,16 +987,51 @@ function draw() {
     ctx.beginPath();ctx.moveTo(p.x-p.vx*2,p.y-p.vy*2);ctx.lineTo(p.x,p.y);ctx.stroke();
   }ctx.restore();}
   for(const f of floaters){ctx.globalAlpha=Math.max(0,f.life);ctx.fillStyle=f.color;ctx.font='bold 20px monospace';ctx.textAlign='center';ctx.fillText(f.text,f.x,f.y);}ctx.globalAlpha=1;
-  const status=world.over?'РАУНД ЗАВЕРШЕНО':paused?'ПАУЗА':danger?'ОБЕРЕЖНО, МЕЖА!':'ГРА ТРИВАЄ';
+  const limit=world.difficulty.dangerSeconds;
+  const remaining=Math.max(0,limit-world.dangerTime/60);
+  const status=world.over?'РАУНД ЗАВЕРШЕНО':paused?'ПАУЗА':danger?`ОБЕРЕЖНО! ${remaining.toFixed(1).replace('.',',')} с`:'ГРА ТРИВАЄ';
   if($('status').textContent!==status)$('status').textContent=status;
   if($('status').dataset.danger!==String(danger)){
-    $('status').dataset.danger=String(danger);$('status').style.color=danger?'#e77666':'';
+    $('status').dataset.danger=String(danger);$('status').style.color=danger?'#ff8a76':'#e8eede';
   }
+  updateClocks();
 }
 let previous=performance.now(),accumulator=0;
+let playSeconds=0,lastClockSecond=-1;
+function formatGameTime(totalSeconds) {
+  const minutes=Math.floor(totalSeconds/60),seconds=Math.floor(totalSeconds%60);
+  return `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+}
+function updateClocks(force = false) {
+  const nowSecond=Math.floor(performance.now()/1000);
+  // Реальний час компʼютера — оновлюємо раз на секунду, навіть на паузі.
+  if(force||nowSecond!==lastClockSecond){
+    lastClockSecond=nowSecond;
+    try{
+      const real=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      const realEl=$('real-clock');
+      if(realEl&&realEl.textContent!==real)realEl.textContent=real;
+    }catch{}
+  }
+  const gameEl=$('game-clock');
+  const gameText=formatGameTime(playSeconds);
+  if(gameEl&&gameEl.textContent!==gameText)gameEl.textContent=gameText;
+  const dangerEl=$('danger-clock');
+  if(dangerEl&&world){
+    const limit=world.difficulty.dangerSeconds;
+    const remaining=Math.max(0,limit-world.dangerTime/60);
+    const text=world.dangerTime>0
+      ?`ОБЕРЕЖНО! ДО КІНЦЯ: ${remaining.toFixed(1).replace('.',',')} с`
+      :`МЕЖА: ${String(limit).replace('.',',')} с`;
+    if(dangerEl.textContent!==text)dangerEl.textContent=text;
+    dangerEl.classList.toggle('danger',world.dangerTime>0);
+  }
+}
+setInterval(()=>updateClocks(false),500);
 function frame(now) {
   const elapsed=Math.min(now-previous,50);previous=now;
   if(!paused&&!document.hidden){
+    playSeconds+=elapsed/1000;
     accumulator+=elapsed;
     while(accumulator>=1000/60){
       needsDraw=true;

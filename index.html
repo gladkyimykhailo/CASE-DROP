@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#111313">
   <title>Case Drop</title>
-  <link rel="stylesheet" href="style.css?v=f757320fa397">
+  <link rel="stylesheet" href="style.css?v=c79d3fd97507">
 </head>
 <body>
   <header class="header">
@@ -41,9 +41,9 @@
         <p id="mystery-hint" aria-live="polite"></p>
       </section>
       <section class="arena-panel" aria-label="Ігрове поле">
-        <div class="arena-top"><span><i class="live-dot"></i> ЗОНА СКИДАННЯ</span><span id="status">ГРА ТРИВАЄ</span></div>
+        <div class="arena-top"><span><i class="live-dot"></i> ЗОНА СКИДАННЯ</span><span class="arena-times"><span id="real-clock" title="Час на компʼютері">--:--:--</span><span id="game-clock" title="Час раунду">00:00</span></span><span id="status">ГРА ТРИВАЄ</span></div>
         <div class="canvas-wrap"><canvas id="game" width="520" height="630" tabindex="0" aria-label="Ігрове поле"></canvas><div class="arena-watermark">CASE<br><span>DROP</span></div><div class="danger-label">МЕЖА ЗАПОВНЕННЯ</div><div id="overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden><div class="overlay-card"><span class="eyebrow" id="modal-eyebrow"></span><h2 id="modal-title"></h2><div id="modal-content"></div><button id="modal-action" class="primary-button">Продовжити <span>↗</span></button><button id="modal-cancel" class="text-button" hidden>Продовжити гру</button></div></div></div>
-        <div class="arena-bottom"><button id="sound" aria-label="Увімкнути звук" title="Увімкнути звук">♫<span class="sound-slash">/</span></button></div>
+        <div class="arena-bottom"><span id="danger-clock" aria-live="polite">МЕЖА: 2,5 с</span><button id="sound" aria-label="Увімкнути звук" title="Увімкнути звук">♫<span class="sound-slash">/</span></button></div>
       </section>
       <section class="upgrade-panel panel" aria-labelledby="chain-title"><div class="label"><span id="chain-title">ЛАНЦЮЖОК ПОКРАЩЕНЬ</span><span id="chain-progress"></span></div><ol id="upgrade-chain" class="upgrade-chain"></ol></section></div>
       <aside class="right-panel"><section class="panel arsenal"><div class="label">ШЛЯХ ПОКРАЩЕНЬ <span id="arsenal-count"></span></div><ol id="weapon-list" tabindex="0" aria-label="Шлях покращень — усі рівні зброї"></ol></section></aside>
@@ -57,6 +57,6 @@
   </main>
   <button id="golden-secret" class="golden-secret" type="button" aria-label="Секрет" title="Секрет" aria-pressed="false"><span aria-hidden="true">✦</span></button>
   <div id="secret-notice" class="secret-notice" role="status"></div>
-  <script src="game.bundle.js?v=784851e9e5c1"></script>
+  <script src="game.bundle.js?v=94824c16322b"></script>
 </body>
 </html>
