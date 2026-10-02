@@ -472,6 +472,8 @@ let sound = false, audio;
 let bursts = [], aimSample = null, flick = 0, victoryDelay = 0;
 let missions = [], missionIndex = 0, missionComplete = false, discovered = new Set();
 let hudDirty = false, needsDraw = true;
+let goldenDrops = false, secretNoticeTimer;
+const goldenKarambit = LEVELS.length - 1;
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 let mode = 'missions', difficulty = 'medium', best = 0;
 try { if(localStorage.getItem('case-drop-mode')==='classic')mode='classic'; } catch {}
@@ -485,7 +487,7 @@ function loadDifficulty() {
 loadDifficulty();
 const bestKey = () => `case-drop-${mode}-${difficulty}-best`;
 const activeMission = () => mode==='missions'?missions[missionIndex]:null;
-const randomTier = () => mode==='missions'?missionDrop(activeMission(),world.bodies):randomDropTier(highest);
+const randomTier = () => goldenDrops?goldenKarambit:mode==='missions'?missionDrop(activeMission(),world.bodies):randomDropTier(highest);
 
 function updateMode() {
   document.querySelectorAll('[data-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.mode===mode)));
@@ -567,7 +569,7 @@ function renderNext() {
   $('next-rarity').style.color=LEVELS[next].color;
   $('next-class').textContent=LEVELS[next].rarity;
   const odds=$('drop-odds');odds.replaceChildren();
-  const pool=activeMission()?.pool??classicDropPool(highest);
+  const pool=goldenDrops?[goldenKarambit]:activeMission()?.pool??classicDropPool(highest);
   for(const {tier,probability} of dropChances(pool)){
     const item=document.createElement('li'),label=document.createElement('span'),chance=document.createElement('strong');
     label.textContent=LEVELS[tier].label;
@@ -675,6 +677,11 @@ function merged(e) {
 }
 function reset(advance = false) {
   advance=advance&&mode==='missions';
+  if(!advance){
+    goldenDrops=false;
+    $('golden-secret').setAttribute('aria-pressed','false');
+    clearTimeout(secretNoticeTimer);$('secret-notice').textContent='';
+  }
   const score=advance?world.score:0,merges=advance?world.merges:0;
   if(advance)missionIndex++;else{missions=mode==='missions'?createMissions(Math.random,difficulty):[];missionIndex=0;discovered=new Set();}
   const mission=activeMission();missionComplete=false;
@@ -695,6 +702,16 @@ function drop() {
   flick=0;aimSample=null;
   highest=Math.max(highest,current);current=next;next=randomTier();cooldown=38;renderNext();updateArsenal();soundEffect();
 }
+$('golden-secret').addEventListener('click',()=>{
+  if(goldenDrops||world.over||modal==='win')return;
+  goldenDrops=true;
+  current=next=goldenKarambit;
+  $('golden-secret').setAttribute('aria-pressed','true');
+  $('secret-notice').textContent='Секрет відкрито! До кінця цієї гри падають лише золоті Karambit.';
+  clearTimeout(secretNoticeTimer);
+  secretNoticeTimer=setTimeout(()=>$('secret-notice').textContent='',5000);
+  renderNext();soundEffect(goldenKarambit,true);
+});
 function setAim(event) {
   const bounds=canvas.getBoundingClientRect(),x=(event.clientX-bounds.left)*520/bounds.width,time=performance.now();
   if(!Number.isFinite(x))return;

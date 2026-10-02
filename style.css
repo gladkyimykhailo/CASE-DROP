@@ -24,3 +24,9 @@
 #weapon-list .weapon-row canvas{flex-shrink:0}
 #weapon-list .weapon-row.current{background:#f6a3430d;border-radius:4px}
 @media(max-width:780px){#weapon-list{max-height:280px;grid-template-columns:repeat(5,minmax(0,1fr))}}
+
+.golden-secret{position:fixed;left:0;bottom:0;width:44px;height:44px;z-index:10;display:grid;place-items:center;padding:0;border:0;background:transparent;color:#59614f;font-size:12px;opacity:.35}
+.golden-secret:hover,.golden-secret:focus-visible,.golden-secret[aria-pressed="true"]{opacity:1;color:#efc762}
+.golden-secret:focus-visible{outline-offset:-4px}
+.secret-notice{position:fixed;left:12px;bottom:52px;z-index:10;max-width:min(320px,calc(100vw - 24px));padding:12px 15px;border:1px solid #806c39;border-radius:6px;background:#25251b;color:#ffe19a;font-size:12px;line-height:1.6;pointer-events:none;box-shadow:0 8px 24px #0005}
+.secret-notice:empty{display:none}
