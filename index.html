@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#111313">
   <title>Case Drop</title>
-  <link rel="stylesheet" href="style.css?v=434cd4181aa6">
+  <link rel="stylesheet" href="style.css?v=679d11ae5837">
 </head>
 <body>
   <header class="header">
@@ -57,6 +57,18 @@
   </main>
   <button id="golden-secret" class="golden-secret" type="button" aria-label="Секрет" title="Секрет" aria-pressed="false"><span aria-hidden="true">✦</span></button>
   <div id="secret-notice" class="secret-notice" role="status"></div>
-  <script src="game.bundle.js?v=94824c16322b"></script>
+  <dialog id="secret-picker" class="secret-picker" aria-labelledby="secret-title">
+    <form id="secret-form">
+      <span class="eyebrow">СЕКРЕТ ВІДКРИТО</span>
+      <h2 id="secret-title">Обери будь-яку зброю</h2>
+      <canvas id="secret-preview" width="280" height="120" aria-hidden="true"></canvas>
+      <label class="skin-filter-label" for="secret-weapon">Зброя<select id="secret-weapon"></select></label>
+      <label class="skin-filter-label" for="secret-skin">Скін<select id="secret-skin"></select></label>
+      <p>Обрана зброя падатиме до кінця гри. Натисни зірку знову, щоб змінити вибір.</p>
+      <button class="primary-button" type="submit">Обрати й продовжити <span>↗</span></button>
+      <button id="secret-cancel" class="text-button" type="button">Повернутися до гри</button>
+    </form>
+  </dialog>
+  <script src="game.bundle.js?v=c6379a5b1e9c"></script>
 </body>
 </html>

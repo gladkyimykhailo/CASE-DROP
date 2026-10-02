@@ -318,7 +318,11 @@ class World {
         this.bodies = this.bodies.filter(b => !consumed.has(b.id));
         // Retire only individual levels ten or more steps behind the best result.
         // Filter the entire batch so simultaneous merges cannot restore them.
-        if (!this.options.mission) this.minimumTier = Math.max(this.minimumTier, oldestActiveTier(Math.max(...results.map(event => event.tier))));
+        if (!this.options.mission) {
+          const floor = Math.max(this.minimumTier, oldestActiveTier(Math.max(...results.map(event => event.tier))));
+          // A secret selection stays available even after higher-tier merges.
+          this.minimumTier = Math.min(floor, this.options.secretTier ?? Infinity);
+        }
         const retired = this.bodies.filter(body => !body.mystery && body.tier < this.minimumTier);
         this.bodies = this.bodies.filter(body => body.mystery || body.tier >= this.minimumTier);
         for (const event of results) {
@@ -619,7 +623,7 @@ let sound = false, audio;
 let bursts = [], aimSample = null, flick = 0, victoryDelay = 0;
 let missions = [], missionIndex = 0, missionComplete = false, discovered = new Set();
 let hudDirty = false, needsDraw = true;
-let goldenDrops = false, secretNoticeTimer;
+let secretTier = null, secretNoticeTimer, secretWasPaused = false;
 const goldenKarambit = LEVELS.length - 1;
 const firstKarambit = LEVELS.findIndex(level=>level.weapon==='Karambit');
 let secretMoveTimer, secretCorner = null, karambitReached = false;
@@ -636,7 +640,7 @@ function loadDifficulty() {
 loadDifficulty();
 const bestKey = () => `case-drop-${mode}-${difficulty}-best`;
 const activeMission = () => mode==='missions'?missions[missionIndex]:null;
-const randomTier = () => goldenDrops?goldenKarambit:mode==='missions'?missionDrop(activeMission(),world.bodies):randomDropTier(highest);
+const randomTier = () => secretTier!==null?secretTier:mode==='missions'?missionDrop(activeMission(),world.bodies):randomDropTier(highest);
 
 function updateMode() {
   document.querySelectorAll('[data-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.mode===mode)));
@@ -711,7 +715,7 @@ function renderNext() {
   $('next-rarity').style.color=LEVELS[next].color;
   $('next-class').textContent=LEVELS[next].rarity;
   const odds=$('drop-odds');odds.replaceChildren();
-  const pool=goldenDrops?[goldenKarambit]:activeMission()?.pool??classicDropPool(highest);
+  const pool=secretTier!==null?[secretTier]:activeMission()?.pool??classicDropPool(highest);
   for(const {tier,probability} of dropChances(pool)){
     const item=document.createElement('li'),label=document.createElement('span'),chance=document.createElement('strong');
     label.textContent=LEVELS[tier].label;
@@ -825,7 +829,7 @@ function merged(e) {
 function reset(advance = false) {
   advance=advance&&mode==='missions';
   if(!advance){
-    goldenDrops=false;
+    secretTier=null;
     resetSecretPosition();
     $('golden-secret').setAttribute('aria-pressed','false');
     clearTimeout(secretNoticeTimer);$('secret-notice').textContent='';
@@ -833,7 +837,7 @@ function reset(advance = false) {
   const score=advance?world.score:0,merges=advance?world.merges:0;
   if(advance)missionIndex++;else{missions=mode==='missions'?createMissions(Math.random,difficulty):[];missionIndex=0;discovered=new Set();}
   const mission=activeMission();missionComplete=false;
-  world=new World(520,630,merged,{difficulty,...(mission?{mission,onMystery:mysteryChanged,mysteryRewards:mission.mysteryRewards}:{})});
+  world=new World(520,630,merged,{difficulty,secretTier,...(mission?{mission,onMystery:mysteryChanged,mysteryRewards:mission.mysteryRewards}:{})});
   world.score=score;world.merges=merges;world.seedCases();
   for(const body of world.bodies)if(!body.mystery)discovered.add(body.tier);
   highest=Math.max(...discovered);current=randomTier();next=randomTier();cooldown=0;particles=[];floaters=[];bursts=[];won=false;aim=260;aimSample=null;flick=0;victoryDelay=0;hudDirty=false;accumulator=0;playSeconds=0;
@@ -896,15 +900,41 @@ function fitSecretToViewport() {
 window.addEventListener('resize',fitSecretToViewport);
 window.visualViewport?.addEventListener('resize',fitSecretToViewport);
 window.visualViewport?.addEventListener('scroll',fitSecretToViewport);
+WEAPONS.forEach((weapon,tier)=>$('secret-weapon').add(new Option(weapon.name,String(tier))));
+function previewSecret() {
+  const level=LEVELS[Number($('secret-skin').value)],c=$('secret-preview').getContext('2d');
+  c.clearRect(0,0,280,120);
+  drawWeapon(c,level.weaponTier,140,60,250,0,level.variant);
+}
+function secretSkins(selectedTier) {
+  const previous=LEVELS[Number($('secret-skin').value)]?.variant??-1;
+  const levels=LEVELS.filter(level=>level.weaponTier===Number($('secret-weapon').value));
+  $('secret-skin').replaceChildren(...levels.map(level=>new Option(level.name,String(level.tier))));
+  $('secret-skin').value=String(selectedTier??levels.find(level=>level.variant===previous).tier);
+  previewSecret();
+}
+$('secret-weapon').addEventListener('change',()=>secretSkins());
+$('secret-skin').addEventListener('change',previewSecret);
 $('golden-secret').addEventListener('click',()=>{
-  if(goldenDrops||world.over||modal==='win')return;
-  goldenDrops=true;
-  current=next=goldenKarambit;
+  if(world.over||modal==='win'||$('secret-picker').open)return;
+  const tier=secretTier??goldenKarambit;
+  $('secret-weapon').value=String(LEVELS[tier].weaponTier);secretSkins(tier);
+  secretWasPaused=paused;paused=true;needsDraw=true;
   $('golden-secret').setAttribute('aria-pressed','true');
-  $('secret-notice').textContent='Секрет відкрито! До кінця цієї гри падають лише золоті Karambit.';
+  $('secret-picker').showModal();
+});
+$('secret-picker').addEventListener('close',()=>{paused=secretWasPaused;needsDraw=true;});
+$('secret-cancel').addEventListener('click',()=>$('secret-picker').close());
+$('secret-form').addEventListener('submit',event=>{
+  event.preventDefault();
+  secretTier=Number($('secret-skin').value);
+  world.options.secretTier=secretTier;
+  world.minimumTier=Math.min(world.minimumTier,secretTier);
+  current=next=secretTier;
+  $('secret-notice').textContent=`Обрано: ${LEVELS[secretTier].label}. Натисни зірку, щоб змінити зброю.`;
   clearTimeout(secretNoticeTimer);
   secretNoticeTimer=setTimeout(()=>$('secret-notice').textContent='',5000);
-  renderNext();soundEffect(goldenKarambit,true);
+  renderNext();soundEffect(secretTier,true);$('secret-picker').close();
 });
 function setAim(event) {
   const bounds=canvas.getBoundingClientRect(),x=(event.clientX-bounds.left)*520/bounds.width,time=performance.now();
@@ -940,7 +970,7 @@ function closeModal(){paused=false;modal='';needsDraw=true;$('overlay').hidden=t
 $('restart').addEventListener('click',()=>{if(world.bodies.length||world.score)showModal('restart');else reset();});
 $('modal-action').addEventListener('click',()=>{if(modal==='level')reset(true);else if(['over','restart','win'].includes(modal))reset();else closeModal();});
 $('modal-cancel').addEventListener('click',closeModal);
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal==='restart')closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal==='restart'&&!$('secret-picker').open)closeModal();});
 
 function draw() {
   ctx.clearRect(0,0,520,630);
