@@ -621,6 +621,8 @@ let missions = [], missionIndex = 0, missionComplete = false, discovered = new S
 let hudDirty = false, needsDraw = true;
 let goldenDrops = false, secretNoticeTimer;
 const goldenKarambit = LEVELS.length - 1;
+const firstKarambit = LEVELS.findIndex(level=>level.weapon==='Karambit');
+let secretMoveTimer, secretCorner = null, karambitReached = false;
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 let mode = 'missions', difficulty = 'medium', best = 0;
 try { if(localStorage.getItem('case-drop-mode')==='classic')mode='classic'; } catch {}
@@ -719,6 +721,10 @@ function renderNext() {
 }
 let arsenalTier = null;
 function updateArsenal(resetScroll = false) {
+  if(!karambitReached&&highest>=firstKarambit){
+    karambitReached=true;
+    moveSecret();
+  }
   const list=$('weapon-list'),mission=activeMission();
   const tier=mission?Math.max(mission.dropTier,...world.bodies.filter(body=>!body.mystery).map(body=>body.tier)):highest;
   [...list.children].forEach((el,i)=>{
@@ -820,6 +826,7 @@ function reset(advance = false) {
   advance=advance&&mode==='missions';
   if(!advance){
     goldenDrops=false;
+    resetSecretPosition();
     $('golden-secret').setAttribute('aria-pressed','false');
     clearTimeout(secretNoticeTimer);$('secret-notice').textContent='';
   }
@@ -843,6 +850,51 @@ function drop() {
   flick=0;aimSample=null;
   highest=Math.max(highest,current);current=next;next=randomTier();cooldown=38;renderNext();updateArsenal();soundEffect();
 }
+function secretBounds() {
+  const viewport=window.visualViewport,button=$('golden-secret');
+  const left=viewport?.offsetLeft??0,top=viewport?.offsetTop??0;
+  const width=viewport?.width??window.innerWidth,height=viewport?.height??window.innerHeight;
+  return {left,top,right:left+Math.max(0,width-button.offsetWidth),bottom:top+Math.max(0,height-button.offsetHeight)};
+}
+function secretCorners(bounds) {
+  const {left,top,right,bottom}=bounds;
+  return [{x:left,y:top},{x:right,y:top},{x:left,y:bottom},{x:right,y:bottom}];
+}
+function placeSecret({x,y}) {
+  const button=$('golden-secret');
+  button.style.left=`${x}px`;button.style.top=`${y}px`;button.style.bottom='auto';
+}
+function moveSecret() {
+  const bounds=secretBounds(),corners=secretCorners(bounds);
+  const current=$('golden-secret').getBoundingClientRect();
+  if(karambitReached){
+    const choices=corners.map((point,index)=>({point,index})).filter(({point})=>Math.hypot(point.x-current.x,point.y-current.y)>1);
+    const choice=choices[Math.floor(Math.random()*choices.length)]??{point:corners[0],index:0};
+    secretCorner=choice.index;placeSecret(choice.point);
+  }else{
+    secretCorner=null;
+    let point={x:bounds.left+Math.random()*(bounds.right-bounds.left),y:bounds.top+Math.random()*(bounds.bottom-bounds.top)};
+    // Make every teleport noticeable even if randomness picks the old position.
+    if(Math.hypot(point.x-current.x,point.y-current.y)<44){
+      point=corners.reduce((farther,next)=>Math.hypot(next.x-current.x,next.y-current.y)>Math.hypot(farther.x-current.x,farther.y-current.y)?next:farther);
+    }
+    placeSecret(point);
+  }
+}
+function resetSecretPosition() {
+  karambitReached=false;secretCorner=null;
+  const bounds=secretBounds();placeSecret({x:bounds.left,y:bounds.bottom});
+  clearInterval(secretMoveTimer);secretMoveTimer=setInterval(moveSecret,60000);
+}
+function fitSecretToViewport() {
+  const bounds=secretBounds();
+  if(secretCorner!==null){placeSecret(secretCorners(bounds)[secretCorner]);return;}
+  const current=$('golden-secret').getBoundingClientRect();
+  placeSecret({x:Math.max(bounds.left,Math.min(bounds.right,current.x)),y:Math.max(bounds.top,Math.min(bounds.bottom,current.y))});
+}
+window.addEventListener('resize',fitSecretToViewport);
+window.visualViewport?.addEventListener('resize',fitSecretToViewport);
+window.visualViewport?.addEventListener('scroll',fitSecretToViewport);
 $('golden-secret').addEventListener('click',()=>{
   if(goldenDrops||world.over||modal==='win')return;
   goldenDrops=true;
