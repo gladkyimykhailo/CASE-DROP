@@ -12,16 +12,58 @@ const RARITY_WEIGHTS = {
 };
 
 const WEAPONS = [
-  { name: 'Glock-18', rarity: 'ШИРОКИЙ ВЖИТОК', color: '#a5b5bc', radius: 25, type: 'glock' },
-  { name: 'USP-S', rarity: 'ПРОМИСЛОВА ЯКІСТЬ', color: '#80adcb', radius: 30, type: 'usp' },
-  { name: 'Desert Eagle', rarity: 'АРМІЙСЬКА ЯКІСТЬ', color: '#6b95e6', radius: 36, type: 'deagle' },
-  { name: 'MP9', rarity: 'АРМІЙСЬКА ЯКІСТЬ', color: '#8180e7', radius: 42, type: 'mp9' },
-  { name: 'P90', rarity: 'ЗАБОРОНЕНА', color: '#a27be0', radius: 48, type: 'p90' },
-  { name: 'FAMAS', rarity: 'ЗАБОРОНЕНА', color: '#c879dc', radius: 54, type: 'famas' },
-  { name: 'M4A1-S', rarity: 'ЗАСЕКРЕЧЕНА', color: '#e17eaf', radius: 60, type: 'm4' },
-  { name: 'AK-47', rarity: 'ТАЄМНА', color: '#e77666', radius: 67, type: 'ak' },
-  { name: 'AWP', rarity: 'ТАЄМНА', color: '#ef9a53', radius: 74, type: 'awp' },
-  { name: 'Karambit', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762', radius: 82, type: 'knife' },
+  // Pistol
+  { name: 'Glock-18', type: 'glock', model: 0, rarity: 'ШИРОКИЙ ВЖИТОК', color: '#a5b5bc' },
+  { name: 'USP-S', type: 'usp', model: 1, rarity: 'ПРОМИСЛОВА ЯКІСТЬ', color: '#80adcb' },
+  { name: 'Desert Eagle', type: 'deagle', model: 2, rarity: 'АРМІЙСЬКА ЯКІСТЬ', color: '#6b95e6' },
+  { name: 'P2000', type: 'p2000', model: 0, rarity: 'ПРОМИСЛОВА ЯКІСТЬ', color: '#80adcb' },
+  { name: 'P250', type: 'p250', model: 0, rarity: 'АРМІЙСЬКА ЯКІСТЬ', color: '#6b95e6' },
+  { name: 'Five-SeveN', type: 'five-seven', model: 2, rarity: 'АРМІЙСЬКА ЯКІСТЬ', color: '#6b95e6' },
+  { name: 'Tec-9', type: 'tec9', model: 0, rarity: 'ЗАБОРОНЕНА', color: '#a27be0' },
+  { name: 'CZ75-Auto', type: 'cz75', model: 0, rarity: 'ЗАБОРОНЕНА', color: '#a27be0' },
+  { name: 'Dual Berettas', type: 'dual-berettas', model: 'dual', rarity: 'ЗАБОРОНЕНА', color: '#a27be0' },
+  { name: 'R8 Revolver', type: 'r8', model: 'revolver', rarity: 'ЗАСЕКРЕЧЕНА', color: '#e17eaf' },
+  // Smg
+  { name: 'MP9', type: 'mp9', model: 3, rarity: 'АРМІЙСЬКА ЯКІСТЬ', color: '#6b95e6' },
+  { name: 'MAC-10', type: 'mac10', model: 'smg', rarity: 'АРМІЙСЬКА ЯКІСТЬ', color: '#6b95e6' },
+  { name: 'MP7', type: 'mp7', model: 'smg', rarity: 'ЗАБОРОНЕНА', color: '#a27be0' },
+  { name: 'MP5-SD', type: 'mp5', model: 'smg', rarity: 'ЗАБОРОНЕНА', color: '#a27be0' },
+  { name: 'UMP-45', type: 'ump', model: 'smg', rarity: 'ЗАБОРОНЕНА', color: '#a27be0' },
+  { name: 'P90', type: 'p90', model: 4, rarity: 'ЗАБОРОНЕНА', color: '#a27be0' },
+  { name: 'PP-Bizon', type: 'bizon', model: 'smg', rarity: 'ЗАСЕКРЕЧЕНА', color: '#e17eaf' },
+  // Shotgun
+  { name: 'Nova', type: 'nova', model: 'shotgun', rarity: 'АРМІЙСЬКА ЯКІСТЬ', color: '#6b95e6' },
+  { name: 'XM1014', type: 'xm1014', model: 'shotgun', rarity: 'ЗАБОРОНЕНА', color: '#a27be0' },
+  { name: 'MAG-7', type: 'mag7', model: 'shotgun', rarity: 'ЗАБОРОНЕНА', color: '#a27be0' },
+  { name: 'Sawed-Off', type: 'sawed-off', model: 'shotgun', rarity: 'ЗАСЕКРЕЧЕНА', color: '#e17eaf' },
+  // Machinegun
+  { name: 'M249', type: 'm249', model: 'machinegun', rarity: 'ЗАСЕКРЕЧЕНА', color: '#e17eaf' },
+  { name: 'Negev', type: 'negev', model: 'machinegun', rarity: 'ТАЄМНА', color: '#e77666' },
+  // Rifle
+  { name: 'FAMAS', type: 'famas', model: 5, rarity: 'ЗАБОРОНЕНА', color: '#a27be0' },
+  { name: 'Galil AR', type: 'galil', model: 7, rarity: 'ЗАБОРОНЕНА', color: '#a27be0' },
+  { name: 'M4A1-S', type: 'm4', model: 6, rarity: 'ЗАСЕКРЕЧЕНА', color: '#e17eaf' },
+  { name: 'M4A4', type: 'm4a4', model: 6, rarity: 'ЗАСЕКРЕЧЕНА', color: '#e17eaf' },
+  { name: 'AK-47', type: 'ak', model: 7, rarity: 'ТАЄМНА', color: '#e77666' },
+  { name: 'AUG', type: 'aug', model: 5, rarity: 'ТАЄМНА', color: '#e77666' },
+  { name: 'SG 553', type: 'sg553', model: 7, rarity: 'ТАЄМНА', color: '#e77666' },
+  // Sniper
+  { name: 'SSG 08', type: 'ssg08', model: 8, rarity: 'ЗАСЕКРЕЧЕНА', color: '#e17eaf' },
+  { name: 'G3SG1', type: 'g3sg1', model: 8, rarity: 'ТАЄМНА', color: '#e77666' },
+  { name: 'SCAR-20', type: 'scar20', model: 8, rarity: 'ТАЄМНА', color: '#e77666' },
+  { name: 'AWP', type: 'awp', model: 8, rarity: 'ТАЄМНА', color: '#e77666' },
+  // Knife
+  { name: 'Bayonet', type: 'bayonet', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'M9 Bayonet', type: 'm9-bayonet', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'Huntsman Knife', type: 'huntsman', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'Bowie Knife', type: 'bowie', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'Falchion Knife', type: 'falchion', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'Butterfly Knife', type: 'butterfly', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'Shadow Daggers', type: 'shadow-daggers', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'Ursus Knife', type: 'ursus', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'Navaja Knife', type: 'navaja', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'Talon Knife', type: 'talon', model: 'blade', rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
+  { name: 'Karambit', type: 'knife', model: 9, rarity: '★ ЛЕГЕНДАРНА', color: '#efc762' },
 ];
 
 
@@ -53,7 +95,7 @@ const LEVELS = WEAPONS.flatMap((weapon, weaponTier) => [
     ...finish, tier, weaponTier, weapon: weapon.name, rarity: weapon.rarity,
     dropWeight: RARITY_WEIGHTS[weapon.rarity] * .94 ** step,
     label: `${weapon.name} · ${finish.name}`,
-    color: finish.base, radius: 25 + tier * .35,
+    color: finish.base, radius: 25 + Math.min(tier, 109) * .35,
   };
 }));
 
@@ -64,7 +106,7 @@ function oldestActiveTier(highest) {
 }
 
 function classicDropPool(highest) {
-  // New drops follow earned progress so all 110 levels remain reachable.
+  // New drops follow earned progress so all catalogue levels remain reachable.
   const floor = oldestActiveTier(highest);
   const ceiling = Math.max(floor, Math.min(LEVELS.length - 2, highest - 1));
   return Array.from({length: Math.min(3, ceiling - floor + 1)}, (_, offset) => ceiling - offset);
@@ -157,7 +199,7 @@ class World {
     this.bodies.push(body); return body;
   }
   radius(tier) {
-    return this.options.mission ? 25 + LEVELS[tier].weaponTier * 1.1 + Math.max(0, LEVELS[tier].variant) * .3 : LEVELS[tier].radius * this.difficulty.caseScale;
+    return this.options.mission ? 25 + Math.min(LEVELS[tier].weaponTier, 9) * 1.1 + Math.max(0, LEVELS[tier].variant) * .3 : LEVELS[tier].radius * this.difficulty.caseScale;
   }
   addMystery(x, y) {
     const body = { id: this.nextId++, mystery: true, tier: null, r: 60, x, y,
@@ -305,12 +347,105 @@ function poly(c, points, fill) {
 }
 function rect(c,x,y,w,h,color) { c.fillStyle=color; c.fillRect(x,y,w,h); }
 
-function drawWeaponBase(c, tier, x, y, width, angle = 0) {
-  const w = WEAPONS[Math.min(tier,9)];
+const bladeProfiles = {
+  bayonet: [[17,27],[69,20],[81,25],[79,34],[31,36]],
+  'm9-bayonet': [[13,23],[39,16],[48,20],[76,20],[82,28],[77,38],[31,36]],
+  huntsman: [[15,19],[35,25],[77,20],[82,30],[69,43],[31,40]],
+  bowie: [[10,18],[27,26],[76,19],[82,28],[73,43],[32,45]],
+  falchion: [[13,16],[27,28],[72,23],[82,30],[69,43],[33,40],[20,31]],
+  butterfly: [[14,19],[71,21],[83,28],[73,35],[26,32]],
+  'shadow-daggers': [[24,10],[40,25],[37,43],[29,43],[26,25]],
+  ursus: [[16,21],[76,21],[82,30],[74,38],[30,38],[15,30]],
+  navaja: [[26,24],[64,19],[81,27],[76,35],[47,39],[33,34]],
+  talon: [[28,12],[36,29],[51,34],[69,25],[82,31],[70,45],[48,49],[29,37],[23,23]],
+};
+function drawBlade(c,w) {
+  const blade=bladeProfiles[w.type];
+  if(w.type==='shadow-daggers'){
+    for(const offset of [12,64]){
+      c.save();c.translate(offset,0);poly(c,blade,w.color);
+      rect(c,19,40,28,7,'#434c47');rect(c,29,45,8,9,'#899485');
+      poly(c,[[24,10],[33,29],[29,40],[26,25]],'#e4e9dd');c.restore();
+    }
+    return;
+  }
+  poly(c,blade,w.color);
+  c.strokeStyle='#e4e9dd';c.lineWidth=2;c.beginPath();
+  blade.slice(-3).forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.stroke();
+  if(w.type==='talon'){
+    poly(c,[[75,31],[94,15],[103,22],[84,44]],'#b7b6a0');
+    c.strokeStyle='#d0d2c8';c.lineWidth=5;c.beginPath();c.arc(99,16,8,0,Math.PI*2);c.stroke();
+  }else if(w.type==='butterfly'){
+    for(const points of [[[76,23],[125,8],[129,14],[82,31]],[[79,29],[128,41],[125,48],[77,36]]])poly(c,points,'#68766e');
+    for(let i=0;i<4;i++){rect(c,93+i*7,21-i*2,3,3,'#222b27');rect(c,93+i*7,35+i*2,3,3,'#222b27');}
+  }else{
+    poly(c,[[78,23],[126,23],[132,29],[125,37],[78,36]],'#434c47');
+    rect(c,77,17,5,26,'#aab1ad');
+    for(let i=0;i<6;i++)rect(c,87+i*6,25,2,9,'#899485');
+    if(['m9-bayonet','huntsman','bowie'].includes(w.type))for(let i=0;i<5;i++)rect(c,46+i*5,20,3,4,'#424a48');
+  }
+}
+
+function drawSpecialFirearm(c,w) {
+  const steel='#aab1ad',dark='#424a48',accent=w.color;
+  if(w.model==='dual'){
+    for(const [x,y] of [[0,0],[25,16]]){
+      poly(c,[[15+x,10+y],[84+x,10+y],[87+x,22+y],[72+x,24+y],[65+x,40+y],[48+x,38+y],[51+x,23+y],[15+x,23+y]],dark);
+      rect(c,15+x,10+y,69,8,steel);rect(c,22+x,11+y,51,2,accent);
+      rect(c,56+x,26+y,9,10,'#877057');
+    }
+  }else if(w.model==='revolver'){
+    rect(c,12,19,69,10,steel);rect(c,13,18,65,3,accent);
+    poly(c,[[73,20],[105,19],[112,32],[103,34],[109,53],[88,52],[83,33],[73,32]],dark);
+    c.fillStyle=steel;c.beginPath();c.ellipse(77,27,16,11,0,0,Math.PI*2);c.fill();
+    for(let i=0;i<3;i++)rect(c,66+i*7,21,3,12,dark);
+  }else if(w.model==='shotgun'){
+    const short=['mag7','sawed-off'].includes(w.type),start=short?29:6;
+    rect(c,start,22,91-start,5,steel);rect(c,start+2,29,61-start,4,dark);
+    rect(c,start+20,24,28,12,w.type==='nova'?'#947253':dark);
+    poly(c,[[70,19],[101,19],[103,31],[83,36],[69,32]],steel);
+    const stock=w.type==='sawed-off'?[[98,25],[119,31],[129,46],[116,47],[99,34]]:[[99,24],[133,24],[134,40],[121,42],[101,32]];
+    poly(c,stock,w.type==='nova'||w.type==='sawed-off'?'#947253':dark);
+    rect(c,74,20,24,3,accent);
+    if(w.type==='mag7'){rect(c,76,33,13,21,dark);rect(c,41,17,30,6,steel);}
+    if(w.type==='xm1014'){rect(c,92,32,7,16,dark);rect(c,34,17,4,7,dark);}
+  }else if(w.model==='machinegun'){
+    rect(c,4,24,60,6,dark);rect(c,6,24,54,2,steel);
+    poly(c,[[45,17],[104,17],[111,31],[93,35],[44,33]],steel);
+    rect(c,49,18,51,5,accent);rect(c,61,33,27,22,w.type==='m249'?'#8d9363':'#84775f');
+    poly(c,[[102,22],[134,20],[135,40],[124,42],[104,32]],dark);
+    rect(c,94,32,8,17,dark);
+    c.strokeStyle=dark;c.lineWidth=3;c.beginPath();c.moveTo(28,30);c.lineTo(18,51);c.moveTo(28,30);c.lineTo(40,51);c.stroke();
+    rect(c,w.type==='m249'?66:76,9,22,4,dark);rect(c,w.type==='m249'?66:76,10,3,10,dark);
+    if(w.type==='negev')for(let i=0;i<5;i++)rect(c,43+i*4,26,2,11,'#c4a85f');
+  }else{
+    const compact=w.type==='mac10',suppressed=w.type==='mp5';
+    const start=suppressed?4:compact?30:14;
+    rect(c,start,22,65-start,suppressed?9:5,dark);
+    poly(c,[[43,17],[98,17],[104,31],[91,35],[43,30]],steel);rect(c,46,18,49,3,accent);
+    if(compact){rect(c,66,30,13,24,dark);rect(c,100,16,21,3,steel);rect(c,119,16,3,24,steel);}
+    else{
+      poly(c,[[98,22],[128,20],[131,37],[120,39],[101,30]],dark);
+      rect(c,88,31,8,18,dark);
+      if(w.type==='bizon'){c.fillStyle='#727f68';c.beginPath();c.roundRect(31,31,50,11,5);c.fill();}
+      else poly(c,[[66,31],[77,31],[75,51],[64,49]],dark);
+      if(w.type==='mp7')rect(c,48,30,6,17,dark);
+      if(w.type==='ump')rect(c,105,25,17,5,'#151e18');
+    }
+    rect(c,52,12,5,7,dark);rect(c,87,12,5,7,dark);
+  }
+}
+
+function drawWeaponBase(c, weaponTier, x, y, width, angle = 0) {
+  const w = WEAPONS[weaponTier],tier=w.model;
   c.save(); c.translate(x,y); c.rotate(angle); c.scale(width / 140,width / 140); c.translate(-70,-30);
   const steel = '#aab1ad', dark = '#424a48', light = '#d0d2c8', accent = w.color;
   c.lineJoin = 'round';
-  if (tier <= 2) {
+  if(tier==='blade') {
+    drawBlade(c,w);
+  } else if(typeof tier==='string') {
+    drawSpecialFirearm(c,w);
+  } else if (tier <= 2) {
     const start = tier === 1 ? 8 : 26, end = tier === 1 ? 104 : 111;
     if(tier === 1) { rect(c,7,18,47,9,dark);rect(c,7,18,46,2,steel); }
     poly(c,[[tier===1?48:23,17],[end,17],[end+5,28],[103,32],[93,53],[72,51],[76,31],[start,30]],dark);
@@ -320,6 +455,11 @@ function drawWeaponBase(c, tier, x, y, width, angle = 0) {
     for(let j=0;j<4;j++)rect(c,88+j*4,20,2,6,'#596361');
     c.strokeStyle=steel;c.lineWidth=2;c.beginPath();c.moveTo(63,30);c.lineTo(64,39);c.lineTo(77,40);c.stroke();
     rect(c,31,12,4,5,dark);rect(c,99,12,4,5,dark);
+    if(w.type==='p2000'){rect(c,27,16,47,9,'#778a82');rect(c,30,17,42,2,light);}
+    if(w.type==='p250'){rect(c,23,16,14,13,dark);rect(c,38,19,33,3,accent);}
+    if(w.type==='five-seven')poly(c,[[29,14],[109,14],[113,24],[27,24]],'#858f75');
+    if(w.type==='tec9'){rect(c,29,13,48,15,steel);rect(c,53,30,12,26,dark);for(let i=0;i<5;i++)rect(c,33+i*7,17,3,5,dark);}
+    if(w.type==='cz75'){rect(c,26,25,39,5,steel);poly(c,[[82,44],[96,47],[89,59],[77,55]],dark);}
   } else if(tier===9) {
     c.strokeStyle=light;c.lineWidth=8;c.beginPath();c.arc(95,18,9,0,Math.PI*2);c.stroke();
     poly(c,[[88,19],[100,27],[80,47],[67,46],[73,32]],'#434c47');
@@ -354,6 +494,13 @@ function drawWeaponBase(c, tier, x, y, width, angle = 0) {
     else {rect(c,81,13,6,7,dark);rect(c,30,16,3,8,dark);}
     for(let j=0;j<5;j++)rect(c,50+j*5,25,2,3,'#3b4240');
     rect(c,89,25,8,2,light);
+    if(w.type==='m4a4'){rect(c,4,22,24,9,dark);rect(c,5,24,23,4,steel);rect(c,49,17,47,3,dark);}
+    if(w.type==='galil'){rect(c,33,20,30,12,'#6d785c');rect(c,111,23,17,10,steel);}
+    if(w.type==='aug'){rect(c,53,8,35,7,dark);poly(c,[[87,29],[126,26],[128,43],[114,44],[105,32]],'#89956b');}
+    if(w.type==='sg553'){rect(c,58,7,30,8,dark);rect(c,34,21,29,10,'#57685d');}
+    if(w.type==='ssg08'){rect(c,7,24,39,3,light);poly(c,[[99,28],[131,32],[127,41],[119,36],[102,33]],dark);}
+    if(w.type==='g3sg1'){rect(c,66,31,13,19,steel);rect(c,28,21,33,10,dark);}
+    if(w.type==='scar20'){rect(c,30,20,71,12,'#b3a17a');rect(c,72,32,13,20,dark);rect(c,107,23,24,10,'#b3a17a');}
   }
   c.restore();
 }
@@ -492,13 +639,7 @@ const randomTier = () => goldenDrops?goldenKarambit:mode==='missions'?missionDro
 function updateMode() {
   document.querySelectorAll('[data-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.mode===mode)));
   document.querySelectorAll('[data-difficulty]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.difficulty===difficulty)));
-  const settings=difficultySettings(difficulty);
-  const seconds=settings.dangerSeconds.toLocaleString('uk-UA');
-  $('difficulty-note').textContent=mode==='missions'
-    ? `${settings.label}: ${settings.missionDepth}–${settings.missionDepth+2} покращень до цілі · ${settings.mysteryHits} ударів по замку · ${seconds} с понад межею.`
-    : `${settings.label}: ${difficulty==='easy'?'менші кейси — більше місця':difficulty==='hard'?'більші кейси — менше місця':'звичайний розмір кейсів'} · ${seconds} с понад межею.`;
   $('mission-panel').hidden=mode==='classic';
-  $('mode-description').textContent=mode==='classic'?'Повне поле Glock. Об’єднуй кейси без завдань.':'Різна зброя. Нові цілі. Таємний кейс.';
   best=0;try{
     const saved=localStorage.getItem(bestKey());
     best=Number(saved??(difficulty==='medium'?localStorage.getItem(`case-drop-${mode}-best`):0))||0;
@@ -524,7 +665,6 @@ function updateMission() {
   const mission=missions[missionIndex],target=LEVELS[mission.target];
   $('mission-number').textContent=`${mission.number} / ${missions.length}`;
   $('mission-target').textContent=target.weapon;$('mission-finish').textContent=target.name;
-  $('mission-hint').textContent=missionComplete?'✓ Ціль досягнуто!':`Від ${LEVELS[mission.dropTier].label} до цілі — ${mission.depth} послідовних покращень. Збирай пари однакових кейсів.`;
   $('mission-title').closest('section').classList.toggle('complete',missionComplete);
   const c=$('target-art').getContext('2d');c.clearRect(0,0,180,80);
   drawWeapon(c,target.weaponTier,90,40,165,0,target.variant);
@@ -537,7 +677,7 @@ function checkMission(tier) {
 function mysteryChanged(event) {
   $('mystery-count').textContent=event.opened?'ВІДКРИТО':`${event.hits} / ${event.required}`;
   $('mystery-progress').value=event.hits;
-  $('mystery-hint').textContent=event.opened?`Усередині: ${LEVELS[event.tier].label}! +${event.points} очок`:`Замок відкрито на ${Math.round(event.hits/event.required*100)}%. Ще ${event.required-event.hits} вибухів поруч.`;
+  $('mystery-hint').textContent=event.opened?`Усередині: ${LEVELS[event.tier].label}! +${event.points} очок`:'';
   bursts.push({x:event.x,y:event.y,radius:event.r,color:'#f6c877',age:0});
   floaters.push({x:event.x,y:event.y-65,text:event.opened?LEVELS[event.tier].weapon:`${Math.round(event.hits/event.required*100)}%`,life:1,color:'#ffcf85'});
   if(event.opened){discovered.add(event.tier);highest=Math.max(highest,event.tier);hudDirty=true;checkMission(event.tier);soundEffect(event.tier,true);}
@@ -597,6 +737,7 @@ function updateArsenal(resetScroll = false) {
   updateSkins();
   renderChain();
 }
+$('arsenal-count').textContent=LEVELS.length;
 for(const level of LEVELS){
   const li=document.createElement('li');li.className='weapon-row';
   li.innerHTML=`<canvas width="140" height="74" aria-hidden="true"></canvas><div class="weapon-info"><div class="weapon-name">${level.weapon}</div><div class="weapon-tier">${level.name}</div></div><span class="weapon-number">${String(level.tier+1).padStart(2,'0')}</span>`;
@@ -624,7 +765,7 @@ function updateSkins() {
     if(!card.hidden)visible++;
     card.classList.toggle('reached',discovered.has(level.tier));
     card.classList.toggle('current',level.tier===highest);
-    card.querySelector('.skin-action').textContent=level.tier===activeMission()?.target?'◎ Ціль рівня':discovered.has(level.tier)?'✓ В арсеналі':'Об’єднай два попередні';
+    card.querySelector('.skin-action').textContent=level.tier===activeMission()?.target?'◎ Ціль рівня':discovered.has(level.tier)?'✓ В арсеналі':'Не відкрито';
   });
   $('skin-count').textContent=`${visible} рівнів`;
   const level=LEVELS[highest],upcoming=LEVELS[highest+1];
@@ -642,7 +783,7 @@ function renderChain() {
     const level=LEVELS[tier],item=document.createElement('li');
     item.className='chain-step';item.classList.toggle('current',tier===highlighted);
     if(tier===highlighted)item.setAttribute('aria-current','step');
-    const stage=mission?(tier===mission.target?'ЦІЛЬ РІВНЯ':'ОБ’ЄДНАЙ ДВА'):(tier===highest?'ТВІЙ РІВЕНЬ':tier<highest?'В АРСЕНАЛІ':'НАСТУПНИЙ СКІН');
+    const stage=mission?(tier===mission.target?'ЦІЛЬ РІВНЯ':'ПОКРАЩЕННЯ'):(tier===highest?'ТВІЙ РІВЕНЬ':tier<highest?'В АРСЕНАЛІ':'НАСТУПНИЙ СКІН');
     item.innerHTML=`<span class="chain-stage">${stage}</span><canvas width="140" height="60" aria-hidden="true"></canvas><strong>${level.weapon}</strong><span>${level.name}</span>`;
     drawWeapon(item.querySelector('canvas').getContext('2d'),level.weaponTier,70,30,125,0,level.variant);
     steps.append(item);
@@ -691,7 +832,7 @@ function reset(advance = false) {
   highest=Math.max(...discovered);current=randomTier();next=randomTier();cooldown=0;particles=[];floaters=[];bursts=[];won=false;aim=260;aimSample=null;flick=0;victoryDelay=0;hudDirty=false;accumulator=0;
   const mysteryHits=difficultySettings(difficulty).mysteryHits;
   $('mystery-count').textContent=`0 / ${mysteryHits}`;$('mystery-progress').max=mysteryHits;$('mystery-progress').value=0;
-  $('mystery-hint').textContent='Вміст невідомий. Зливай кейси поруч — відкривай замок.';
+  $('mystery-hint').textContent='';
   updateMode();closeModal();updateScore();renderNext();updateArsenal(true);updateMission();
   drop();
 }
@@ -732,24 +873,21 @@ canvas.addEventListener('keydown',event=>{
 $('sound').addEventListener('click',()=>{sound=!sound;$('sound').querySelector('span').hidden=sound;$('sound').setAttribute('aria-label',sound?'Вимкнути звук':'Увімкнути звук');$('sound').title=sound?'Вимкнути звук':'Увімкнути звук';if(sound)soundEffect(2,true);});
 function showModal(type) {
   needsDraw=true;
-  const settings=difficultySettings(difficulty),seconds=settings.dangerSeconds.toLocaleString('uk-UA');
   modal=type;paused=true;$('overlay').hidden=false;$('modal-cancel').hidden=type!=='restart';
   const content={
-    help:['ПОЛЬОВИЙ ПОСІБНИК','Збирай свій арсенал',mode==='classic'?`<p>На полі 67 кейсів зі звичайним Glock-18. Кейси падають автоматично від початку раунду — просто наводь мишкою або пальцем.</p><p>Об’єднуй однакову зброю з однаковим скіном: два кейси дають наступне покращення. Після десяти скінів відкривається наступна зброя. Нові кейси стають кращими разом із твоїм прогресом. Серед доступних кейсів рідкісніша зброя та кращі скіни випадають рідше. Відсотки є в блоці «Шанси нових кейсів».</p><p>Грай без завдань і збирай очки. Кейси, які відстали від найкращого рівня на 10 покращень, зникають. Два фінальні золоті Karambit звільняють місце й дають очки — можна грати далі.</p><p>Води мишкою або пальцем по полю — кейси падають автоматично. З клавіатури керуй стрілками ← і →. Не дай кейсам залишатися над червоною лінією понад ${seconds} с.</p>`:`<p>Пройди 10 випадкових завдань: у кожній новій грі цілі та початкова купа змінюються. На кожному рівні збери зброю зі скіном, указаним у завданні. Купа починає рухатися одразу, а нові кейси падають автоматично.</p><p>Просто води мишкою або пальцем по полю, щоб обирати місце падіння. Два кейси з однаковою зброєю та скіном зливаються в наступне покращення.</p><p>Складність ${settings.label}: до цілі потрібно пройти ${settings.missionDepth} покращення на рівнях 1–4, ${settings.missionDepth+1} на рівнях 5–8 і ${settings.missionDepth+2} на рівнях 9–10. Черга видає три рівні кейсів, близькі до початкового рівня завдання: рідкісніша зброя та кращі скіни випадають рідше. Відсотки є в блоці «Шанси нових кейсів». Покращені кейси збирай на полі: черга не видає готові пари для перемоги.</p><p>${settings.mysteryHits} ударів від злиттів поруч відкриють таємний кейс із бонусом. Не дай кейсам залишатися вище червоної лінії понад ${seconds} с.</p><p class="modal-controls">Клавіатура: <kbd>←</kbd> <kbd>→</kbd> — обирай місце, кейси падають самі.</p>`,'Погнали'],
     restart:['НОВИЙ РАУНД','Почати нову гру?',mode==='classic'?'<p>Поле знову заповниться 67 кейсами Glock-18, а рахунок скинеться. Рекорд залишиться.</p>':'<p>Ти повернешся до першого рівня, а рахунок скинеться. Рекорд залишиться.</p>','Почати нову гру'],
     level:['ЦІЛЬ ДОСЯГНУТО',`Рівень ${missionIndex+1} пройдено!`,`<p>Ти зібрав <strong>${activeMission()?LEVELS[activeMission().target].label:''}</strong>.</p><div class="modal-score">${world.score}</div>`,'Наступний рівень'],
     over:['РАУНД ЗАВЕРШЕНО','Арсенал заповнений',`<p>Твій результат</p><div class="modal-score">${world.score}</div><p>Відкрито кейсів: <strong>${world.merges}</strong><br>Найкраща зброя: <strong>${LEVELS[highest].label}</strong></p>`,'Ще один раунд'],
-    win:['★ УСІ ЗАВДАННЯ ВИКОНАНО','10 перемог — арсенал зібрано!',`<p>Ти виконав усі випадкові завдання. Почни нову гру, щоб отримати нові цілі!</p><div class="modal-score">${world.score}</div>`,'Нова гра'],
+    win:['★ УСІ ЗАВДАННЯ ВИКОНАНО','10 перемог — арсенал зібрано!',`<p>Ти виконав усі завдання!</p><div class="modal-score">${world.score}</div>`,'Нова гра'],
   }[type];
   $('modal-eyebrow').textContent=content[0];$('modal-title').textContent=content[1];$('modal-content').innerHTML=content[2];$('modal-action').innerHTML=content[3]+' <span>↗</span>';
   $('modal-action').focus({preventScroll:true});
 }
 function closeModal(){paused=false;modal='';needsDraw=true;$('overlay').hidden=true;canvas.focus({preventScroll:true});}
-$('help').addEventListener('click',()=>{if(!modal)showModal('help');});
 $('restart').addEventListener('click',()=>{if(world.bodies.length||world.score)showModal('restart');else reset();});
 $('modal-action').addEventListener('click',()=>{if(modal==='level')reset(true);else if(['over','restart','win'].includes(modal))reset();else closeModal();});
 $('modal-cancel').addEventListener('click',closeModal);
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&['help','restart'].includes(modal))closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal==='restart')closeModal();});
 
 function draw() {
   ctx.clearRect(0,0,520,630);
@@ -796,7 +934,7 @@ function draw() {
     ctx.beginPath();ctx.moveTo(p.x-p.vx*2,p.y-p.vy*2);ctx.lineTo(p.x,p.y);ctx.stroke();
   }ctx.restore();}
   for(const f of floaters){ctx.globalAlpha=Math.max(0,f.life);ctx.fillStyle=f.color;ctx.font='bold 20px monospace';ctx.textAlign='center';ctx.fillText(f.text,f.x,f.y);}ctx.globalAlpha=1;
-  const status=world.over?'РАУНД ЗАВЕРШЕНО':paused?'ПАУЗА':danger?'ОБЕРЕЖНО, МЕЖА!':'АВТОДРОП — НАВОДЬ';
+  const status=world.over?'РАУНД ЗАВЕРШЕНО':paused?'ПАУЗА':danger?'ОБЕРЕЖНО, МЕЖА!':'ГРА ТРИВАЄ';
   if($('status').textContent!==status)$('status').textContent=status;
   if($('status').dataset.danger!==String(danger)){
     $('status').dataset.danger=String(danger);$('status').style.color=danger?'#e77666':'';

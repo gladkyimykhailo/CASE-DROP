@@ -30,3 +30,11 @@
 .golden-secret:focus-visible{outline-offset:-4px}
 .secret-notice{position:fixed;left:max(12px,env(safe-area-inset-left));bottom:calc(max(12px,env(safe-area-inset-bottom)) + 52px);z-index:10;max-width:min(320px,calc(100vw - 24px));padding:12px 15px;border:1px solid #806c39;border-radius:6px;background:#25251b;color:#ffe19a;font-size:12px;line-height:1.6;pointer-events:none;box-shadow:0 8px 24px #0005}
 .secret-notice:empty{display:none}
+
+/* Compact layout after removing the tutorial and gameplay instructions. */
+.difficulty-picker{margin-bottom:24px}
+.left-panel>.secondary-button{margin-top:16px}
+.arena-bottom{justify-content:flex-end}
+.arsenal>.label{margin-bottom:16px}
+#mystery-hint:empty{display:none}
+@media(max-width:500px){.left-panel>.secondary-button{position:static;margin-top:0;padding:8px 0}}
