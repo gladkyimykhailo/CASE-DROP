@@ -560,6 +560,7 @@ function drawWeapon(c, tier, x, y, width, angle = 0, variant = -1) {
     p.globalAlpha = .25;
     const shine = p.createLinearGradient(0,5,0,55);shine.addColorStop(0,'#ffffff');shine.addColorStop(.5,'#ffffff00');shine.addColorStop(1,'#000000');
     p.fillStyle=shine;p.fillRect(0,0,140,60);
+    if (weaponArt.size >= 96) weaponArt.delete(weaponArt.keys().next().value);
     weaponArt.set(key, surface);
   }
   c.save();c.translate(x,y);c.rotate(angle);c.drawImage(weaponArt.get(key),-width/2,-width*30/140,width,width*60/140);c.restore();
@@ -648,6 +649,13 @@ const goldenKarambit = LEVELS.length - 1;
 const firstKarambit = LEVELS.findIndex(level=>level.weapon==='Karambit');
 let secretMoveTimer, secretCorner = null, karambitReached = false;
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+const mobileLayout = window.matchMedia('(max-width: 780px), (max-height: 550px) and (max-width: 950px), (pointer: coarse)');
+let arenaVisible = false;
+const browsingOnMobile = () => mobileLayout.matches && !arenaVisible;
+new IntersectionObserver(([entry])=>{
+  arenaVisible=entry.intersectionRatio>=.5;needsDraw=true;
+},{threshold:[0,.5,1]}).observe(canvas);
+mobileLayout.addEventListener('change',()=>{needsDraw=true;});
 let mode = 'missions', difficulty = 'medium', best = 0;
 try { if(localStorage.getItem('case-drop-mode')==='classic')mode='classic'; } catch {}
 function loadDifficulty() {
@@ -768,11 +776,21 @@ function updateArsenal(resetScroll = false) {
   renderChain();
 }
 $('arsenal-count').textContent=LEVELS.length;
+// Defer catalogue artwork until its cards approach the visible area.
+const catalogueArtObserver=new IntersectionObserver(entries=>{
+  for(const entry of entries){
+    if(!entry.isIntersecting)continue;
+    const surface=entry.target,level=LEVELS[Number(surface.dataset.tier)];
+    drawWeapon(surface.getContext('2d'),level.weaponTier,surface.width/2,surface.height/2,surface.width*.9,0,level.variant);
+    surface.dataset.painted='true';catalogueArtObserver.unobserve(surface);
+  }
+},{rootMargin:'160px 0px'});
+function observeCatalogueArt(surface,level){surface.dataset.tier=level.tier;catalogueArtObserver.observe(surface);}
 for(const level of LEVELS){
   const li=document.createElement('li');li.className='weapon-row';
   li.innerHTML=`<canvas width="140" height="74" aria-hidden="true"></canvas><div class="weapon-info"><div class="weapon-name">${level.weapon}</div><div class="weapon-tier">${level.name}</div></div><span class="weapon-number">${String(level.tier+1).padStart(2,'0')}</span>`;
   li.querySelector('.weapon-tier').style.color=level.color;
-  drawWeapon(li.querySelector('canvas').getContext('2d'),level.weaponTier,70,37,126,0,level.variant);
+  observeCatalogueArt(li.querySelector('canvas'),level);
   $('weapon-list').append(li);
 }
 const skinCards = [];
@@ -785,7 +803,7 @@ LEVELS.forEach(level => {
   card.style.setProperty('--skin-color',level.color);
   card.setAttribute('aria-label',`Рівень ${level.tier+1}: ${level.label}`);
   card.innerHTML=`<canvas width="280" height="120" aria-hidden="true"></canvas><span class="skin-weapon">${String(level.tier+1).padStart(2,'0')} · ${level.weapon}</span><strong>${level.name}</strong><span class="skin-action"></span>`;
-  drawWeapon(card.querySelector('canvas').getContext('2d'),level.weaponTier,140,60,250,0,level.variant);
+  observeCatalogueArt(card.querySelector('canvas'),level);
   $('skin-list').append(card);skinCards.push({card,level});
 });
 function updateSkins() {
@@ -869,7 +887,7 @@ function reset(advance = false) {
   drop();
 }
 function drop() {
-  if(paused||document.hidden||world.over||cooldown>0||missionComplete)return;
+  if(paused||browsingOnMobile()||document.hidden||world.over||cooldown>0||missionComplete)return;
   const body=world.add(current,aim,48);
   if(aimSample&&performance.now()-aimSample.time<120){body.vx=flick;body.omega=flick/body.r;}
   flick=0;aimSample=null;
@@ -879,7 +897,9 @@ function secretBounds() {
   const viewport=window.visualViewport,button=$('golden-secret');
   const left=viewport?.offsetLeft??0,top=viewport?.offsetTop??0;
   const width=viewport?.width??window.innerWidth,height=viewport?.height??window.innerHeight;
-  return {left,top,right:left+Math.max(0,width-button.offsetWidth),bottom:top+Math.max(0,height-button.offsetHeight)};
+  const style=getComputedStyle(document.documentElement);
+  const inset=side=>parseFloat(style.getPropertyValue(`--safe-${side}`))||0;
+  return {left:left+inset('left'),top:top+inset('top'),right:left+Math.max(inset('left'),width-inset('right')-button.offsetWidth),bottom:top+Math.max(inset('top'),height-inset('bottom')-button.offsetHeight)};
 }
 function secretCorners(bounds) {
   const {left,top,right,bottom}=bounds;
@@ -966,6 +986,7 @@ function setAim(event) {
 canvas.addEventListener('pointermove',setAim);
 canvas.addEventListener('pointerdown',event=>{if(event.button!==0)return;event.preventDefault();canvas.focus({preventScroll:true});setAim(event);canvas.setPointerCapture(event.pointerId);});
 canvas.addEventListener('pointerup',event=>{if(event.button!==0)return;setAim(event);});
+canvas.addEventListener('pointercancel',()=>{aimSample=null;flick=0;});
 canvas.addEventListener('keydown',event=>{
   needsDraw=true;
   aimSample=null;flick=0;
@@ -978,6 +999,7 @@ function showModal(type) {
   needsDraw=true;
   modal=type;paused=true;$('overlay').hidden=false;$('modal-cancel').hidden=type!=='restart';
   const content={
+    pause:['ПАУЗА','Гра на паузі','<p>Продовжуй, коли будеш готовий.</p>','Продовжити гру'],
     restart:['НОВИЙ РАУНД','Почати нову гру?',mode==='classic'?'<p>Поле знову заповниться 67 кейсами Glock-18, а рахунок скинеться. Рекорд залишиться.</p>':'<p>Ти повернешся до першого рівня, а рахунок скинеться. Рекорд залишиться.</p>','Почати нову гру'],
     level:['ЦІЛЬ ДОСЯГНУТО',`Рівень ${missionIndex+1} пройдено!`,`<p>Ти зібрав <strong>${activeMission()?LEVELS[activeMission().target].label:''}</strong>.</p><div class="modal-score">${world.score}</div>`,'Наступний рівень'],
     over:['РАУНД ЗАВЕРШЕНО','Арсенал заповнений',`<p>Твій результат</p><div class="modal-score">${world.score}</div><p>Відкрито кейсів: <strong>${world.merges}</strong><br>Найкраща зброя: <strong>${LEVELS[highest].label}</strong></p>`,'Ще один раунд'],
@@ -988,9 +1010,10 @@ function showModal(type) {
 }
 function closeModal(){paused=false;modal='';needsDraw=true;$('overlay').hidden=true;canvas.focus({preventScroll:true});}
 $('restart').addEventListener('click',()=>{if(world.bodies.length||world.score)showModal('restart');else reset();});
+$('pause').addEventListener('click',()=>{if(!modal&&!world.over)showModal('pause');});
 $('modal-action').addEventListener('click',()=>{if(modal==='level')reset(true);else if(['over','restart','win'].includes(modal))reset();else closeModal();});
 $('modal-cancel').addEventListener('click',closeModal);
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal==='restart'&&!$('secret-picker').open)closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&['restart','pause'].includes(modal)&&!$('secret-picker').open)closeModal();});
 
 function draw() {
   ctx.clearRect(0,0,520,630);
@@ -1039,7 +1062,7 @@ function draw() {
   for(const f of floaters){ctx.globalAlpha=Math.max(0,f.life);ctx.fillStyle=f.color;ctx.font='bold 20px monospace';ctx.textAlign='center';ctx.fillText(f.text,f.x,f.y);}ctx.globalAlpha=1;
   const limit=world.difficulty.dangerSeconds;
   const remaining=Math.max(0,limit-world.dangerTime/60);
-  const status=world.over?'РАУНД ЗАВЕРШЕНО':paused?'ПАУЗА':danger?`ОБЕРЕЖНО! ${remaining.toFixed(1).replace('.',',')} с`:'ГРА ТРИВАЄ';
+  const status=world.over?'РАУНД ЗАВЕРШЕНО':paused||browsingOnMobile()?'ПАУЗА':danger?`ОБЕРЕЖНО! ${remaining.toFixed(1).replace('.',',')} с`:'ГРА ТРИВАЄ';
   if($('status').textContent!==status)$('status').textContent=status;
   if($('status').dataset.danger!==String(danger)){
     $('status').dataset.danger=String(danger);$('status').style.color=danger?'#ff8a76':'#e8eede';
@@ -1080,7 +1103,7 @@ function updateClocks(force = false) {
 setInterval(()=>updateClocks(false),500);
 function frame(now) {
   const elapsed=Math.min(now-previous,50);previous=now;
-  if(!paused&&!document.hidden){
+  if(!paused&&!browsingOnMobile()&&!document.hidden){
     playSeconds+=elapsed/1000;
     accumulator+=elapsed;
     while(accumulator>=1000/60){

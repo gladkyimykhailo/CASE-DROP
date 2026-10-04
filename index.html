@@ -2,15 +2,15 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#111313">
   <title>Case Drop</title>
-  <link rel="stylesheet" href="style.css?v=1565fdf17f0b">
+  <link rel="stylesheet" href="style.css?v=bc37ec79893e">
 </head>
 <body>
   <header class="header">
     <a class="brand" href="./" aria-label="Case Drop — головна"><span class="brand-icon">▱</span> Case<span>&nbsp;Drop</span><small>MERGE PROTOCOL</small></a>
-    <div class="header-right"><span class="live-dot"></span><span>У ТВОЄМУ АРСЕНАЛІ — УСЕ</span><span class="version">V.01</span></div>
+    <div class="header-right"><span class="live-dot"></span><span>У ТВОЄМУ АРСЕНАЛІ — УСЕ</span><span class="version">V.01</span><a class="mobile-play-link" href="#play">Грати ↓</a></div>
   </header>
   <main>
     <section class="intro"><div><div class="eyebrow"><span></span> COUNTER-STRIKE INSPIRED</div><h1>Case Drop</h1></div></section>
@@ -40,10 +40,10 @@
         <progress id="mystery-progress" max="30" value="0" aria-label="Відкриття таємного кейса"></progress>
         <p id="mystery-hint" aria-live="polite"></p>
       </section>
-      <section class="arena-panel" aria-label="Ігрове поле">
+      <section id="play" class="arena-panel" aria-label="Ігрове поле">
         <div class="arena-top"><span><i class="live-dot"></i> ЗОНА СКИДАННЯ</span><span class="arena-times"><span id="real-clock" title="Час на компʼютері">--:--:--</span><span id="game-clock" title="Час раунду">00:00</span></span><span id="status">ГРА ТРИВАЄ</span></div>
-        <div class="canvas-wrap"><canvas id="game" width="520" height="630" tabindex="0" aria-label="Ігрове поле"></canvas><div class="arena-watermark">CASE<br><span>DROP</span></div><div class="danger-label">МЕЖА ЗАПОВНЕННЯ</div><div id="overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden><div class="overlay-card"><span class="eyebrow" id="modal-eyebrow"></span><h2 id="modal-title"></h2><div id="modal-content"></div><button id="modal-action" class="primary-button">Продовжити <span>↗</span></button><button id="modal-cancel" class="text-button" hidden>Продовжити гру</button></div></div></div>
-        <div class="arena-bottom"><span id="danger-clock" aria-live="polite">МЕЖА: 2,5 с</span><button id="sound" aria-label="Увімкнути звук" title="Увімкнути звук">♫<span class="sound-slash">/</span></button></div>
+        <div class="canvas-wrap"><canvas id="game" width="520" height="630" tabindex="0" aria-label="Ігрове поле"></canvas><div class="arena-watermark">CASE<br><span>DROP</span></div><div class="danger-label">МЕЖА ЗАПОВНЕННЯ</div></div>
+        <div class="arena-bottom"><span id="danger-clock" aria-live="polite">МЕЖА: 2,5 с</span><button id="pause" type="button">Ⅱ Пауза</button><button id="sound" aria-label="Увімкнути звук" title="Увімкнути звук">♫<span class="sound-slash">/</span></button></div>
       </section>
       <section class="upgrade-panel panel" aria-labelledby="chain-title"><div class="label"><span id="chain-title">ЛАНЦЮЖОК ПОКРАЩЕНЬ</span><span id="chain-progress"></span></div><ol id="upgrade-chain" class="upgrade-chain"></ol></section></div>
       <aside class="right-panel"><section class="panel arsenal"><div class="label">ШЛЯХ ПОКРАЩЕНЬ <span id="arsenal-count"></span></div><ol id="weapon-list" tabindex="0" aria-label="Шлях покращень — усі рівні зброї"></ol></section></aside>
@@ -55,6 +55,7 @@
     </section>
     <footer><span>ЖОДНОГО РИЗИКУ. ТІЛЬКИ СКІЛ.</span><span>Фанатська мінігра · Не пов’язана з Valve</span><span class="footer-mark">GL & HF <span>↗</span></span></footer>
   </main>
+  <div id="overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden><div class="overlay-card"><span class="eyebrow" id="modal-eyebrow"></span><h2 id="modal-title"></h2><div id="modal-content"></div><button id="modal-action" class="primary-button">Продовжити <span>↗</span></button><button id="modal-cancel" class="text-button" hidden>Продовжити гру</button></div></div>
   <button id="golden-secret" class="golden-secret" type="button" aria-label="Секрет" title="Секрет" aria-pressed="false"><span aria-hidden="true">✦</span></button>
   <div id="secret-notice" class="secret-notice" role="status"></div>
   <dialog id="secret-picker" class="secret-picker" aria-labelledby="secret-title">
@@ -69,6 +70,6 @@
       <button id="secret-cancel" class="text-button" type="button">Повернутися до гри</button>
     </form>
   </dialog>
-  <script src="game.bundle.js?v=cf0e0b79c540"></script>
+  <script src="game.bundle.js?v=9fa720a1bd13"></script>
 </body>
 </html>
