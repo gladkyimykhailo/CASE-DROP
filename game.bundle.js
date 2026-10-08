@@ -636,11 +636,112 @@ function drawMysteryCase(c, body) {
   c.restore();
 }
 
+// Host-authoritative co-op. Only aim, presence and pause requests travel upstream.
+const ROOM_PROTOCOL = 1;
+function roomCode(value) {
+  if (typeof value !== 'string' || value.length > 2048) return '';
+  try { value = new URL(value).hash.slice(1).replace(/^room=/, ''); } catch {}
+  value = value.trim().toUpperCase();
+  return /^[A-F0-9]{12}$/.test(value) ? value : '';
+}
+function newRoomCode() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(6)), n => n.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+function playerInput(data) {
+  if (!data || data.type !== 'input' || !Number.isFinite(data.aim) || typeof data.active !== 'boolean') return null;
+  return { aim: Math.max(9, Math.min(511, data.aim)), active: data.active };
+}
+function validSnapshot(s, tierCount = 700) {
+  const tier = n => Number.isInteger(n) && n >= 0 && n < tierCount;
+  const finite = n => Number.isFinite(n) && Math.abs(n) <= 1e12;
+  const tiers = a => Array.isArray(a) && a.length <= tierCount && a.every(tier);
+  return !!s && s.type === 'state' && s.protocol === ROOM_PROTOCOL &&
+    ['missions', 'classic'].includes(s.mode) && ['easy', 'medium', 'hard'].includes(s.difficulty) &&
+    ['','pause','restart','level','over','win'].includes(s.modal) &&
+    ['paused','over','missionComplete','blocked'].every(k => typeof s[k] === 'boolean') &&
+    ['score','merges','dangerTime','playSeconds','aim','turn','cooldown','round'].every(k => finite(s[k]) && s[k] >= 0) &&
+    [s.current,s.next,s.highest,s.minimumTier].every(tier) && tiers(s.discovered) && s.discovered.length > 0 &&
+    Array.isArray(s.missions) && (s.mode === 'classic' ? s.missions.length === 0 : s.missions.length === 10 && s.missions.every(m =>
+      m && tier(m.target) && tier(m.dropTier) && tiers(m.pool) && m.pool.length > 0 && tiers(m.seedPool) && tiers(m.mysteryRewards) &&
+      Number.isInteger(m.number) && m.number >= 1 && m.number <= 10 && [20,30,40].includes(m.mysteryHits))) &&
+    Number.isInteger(s.missionIndex) && s.missionIndex >= 0 && s.missionIndex < 10 &&
+    Array.isArray(s.bodies) && s.bodies.length <= 1000 && s.bodies.every(b => b &&
+      ['id','x','y','r','angle','born'].every(k => finite(b[k])) && b.r > 0 && b.r <= 100 &&
+      (b.mystery === true ? finite(b.hits) && [20,30,40].includes(b.required) : tier(b.tier)));
+}
+class CoopRoom {
+  constructor({ Peer, role, code, onStatus, onConnect, onData }) {
+    this.role = role; this.code = code; this.onStatus = onStatus; this.onData = onData;
+    this.connected = false; this.closed = false;
+    this.peer = new Peer(role === 'host' ? `case-drop-v1-${code}` : undefined, { debug: 0 });
+    this.timer = setTimeout(() => this.fail('Підключення не вдалося. Перевір інтернет і спробуй ще раз.'), 20000);
+    this.peer.on('open', () => {
+      if (this.closed) return;
+      if (role === 'host') { clearTimeout(this.timer); onStatus('waiting', 'Кімната готова. Надішли другу посилання або код.'); }
+      else this.attach(this.peer.connect(`case-drop-v1-${code}`, { reliable: true, serialization: 'binary', metadata: { protocol: ROOM_PROTOCOL } }), onConnect);
+    });
+    this.peer.on('connection', connection => {
+      if (role !== 'host' || this.connection || connection.metadata?.protocol !== ROOM_PROTOCOL) {
+        connection.on('error', () => {});
+        connection.on('open', () => { connection.send({ type: 'rejected' }); setTimeout(() => connection.close(), 300); });
+        return;
+      }
+      this.attach(connection, onConnect);
+    });
+    this.peer.on('error', error => {
+      // A signaling outage does not interrupt an established direct connection.
+      if (this.connected && ['network', 'server-error', 'socket-error'].includes(error.type)) return;
+      this.fail(error.type === 'peer-unavailable' ? 'Кімнату не знайдено. Перевір код і чи відкрита гра у друга.' : error.type === 'unavailable-id' ? 'Цей код уже зайнятий. Створи нову кімнату.' : 'Не вдалося з’єднатися. Спробуйте іншу мережу або створіть кімнату знову.');
+    });
+    this.peer.on('disconnected', () => { if (!this.connected) this.fail('Зв’язок із сервером втрачено. Створи кімнату знову.'); });
+  }
+  attach(connection, onConnect) {
+    this.connection = connection;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.fail('Не вдалося встановити пряме з’єднання. Спробуйте іншу мережу та створіть кімнату знову.'), 20000);
+    connection.on('open', () => {
+      if (this.closed) return;
+      clearTimeout(this.timer); this.connected = true; this.lastSeen = Date.now();
+      this.heartbeat = setInterval(() => {
+        if (Date.now() - this.lastSeen > 15000) this.fail('Друг не відповідає. Гру зупинено; підключіться знову.');
+        else this.send({ type: 'ping' });
+      }, 1000);
+      this.onStatus('connected', 'Ви вдвох! Кейси падають по черзі.'); onConnect();
+    });
+    connection.on('data', data => {
+      if (this.closed || !data || typeof data !== 'object') return;
+      this.lastSeen = Date.now();
+      if (data.type === 'rejected') { this.fail('Кімната вже зайнята або версії гри різні. Онови сторінку.'); return; }
+      if (data.type === 'ping') { this.send({ type: 'pong' }); return; }
+      if (data.type !== 'pong') this.onData(data);
+    });
+    connection.on('close', () => this.fail('Друг вийшов із кімнати. Гру зупинено. Створіть нову кімнату для продовження.'));
+    connection.on('error', () => this.fail('З’єднання перервано. Створіть нову кімнату або спробуйте іншу мережу.'));
+  }
+  send(data) {
+    if (!this.connected || this.closed || this.connection?.dataChannel?.bufferedAmount > 128000) return;
+    try { this.connection.send(data); } catch { this.fail('З’єднання перервано. Підключіться знову.'); }
+  }
+  fail(message) {
+    if (this.closed) return;
+    this.close(); this.onStatus('error', message);
+  }
+  close() {
+    this.closed = true; this.connected = false;
+    clearTimeout(this.timer); clearInterval(this.heartbeat);
+    this.connection?.close(); this.peer.destroy();
+  }
+}
+
 
 const $ = id => document.getElementById(id);
 const canvas = $('game'), ctx = canvas.getContext('2d');
 let world, current, next, aim = 260, cooldown = 0, particles = [], floaters = [], paused = false, modal = '', highest = 0, won = false;
 let sound = false, audio;
+let room = null, roomLoading = false, coopTurn = 0, coopRound = 0, remoteAim = 260, remoteActive = false, remoteInputAt = 0, hostBlocked = false;
+const isGuest = () => room?.role === 'guest';
+const coopBlocked = () => !!room && (!room.connected || (isGuest() ? hostBlocked : !remoteActive || Date.now()-remoteInputAt>2500));
+const dropAim = () => room ? (isGuest() || coopTurn%2 ? remoteAim : aim) : aim;
 let bursts = [], aimSample = null, flick = 0, victoryDelay = 0;
 let missions = [], missionIndex = 0, missionComplete = false, discovered = new Set();
 let hudDirty = false, needsDraw = true;
@@ -666,7 +767,7 @@ function loadDifficulty() {
   } catch {}
 }
 loadDifficulty();
-const bestKey = () => `case-drop-${mode}-${difficulty}-best`;
+const bestKey = () => `case-drop-${room?'coop-':''}${mode}-${difficulty}-best`;
 const activeMission = () => mode==='missions'?missions[missionIndex]:null;
 const randomTier = () => secretTier!==null?secretTier:mode==='missions'?missionDrop(activeMission(),world.bodies):randomDropTier(highest);
 
@@ -676,19 +777,19 @@ function updateMode() {
   $('mission-panel').hidden=mode==='classic';
   best=0;try{
     const saved=localStorage.getItem(bestKey());
-    best=Number(saved??(difficulty==='medium'?localStorage.getItem(`case-drop-${mode}-best`):0))||0;
+    best=Number(saved??(!room&&difficulty==='medium'?localStorage.getItem(`case-drop-${mode}-best`):0))||0;
   }catch{}
   $('best').textContent=best.toLocaleString('uk-UA');
 }
 document.querySelectorAll('[data-mode]').forEach(button=>button.addEventListener('click',()=>{
-  if(button.dataset.mode===mode)return;
+  if(isGuest()||button.dataset.mode===mode)return;
   mode=button.dataset.mode;
   loadDifficulty();
   try{localStorage.setItem('case-drop-mode',mode);}catch{}
   reset();
 }));
 document.querySelectorAll('[data-difficulty]').forEach(button=>button.addEventListener('click',()=>{
-  if(button.dataset.difficulty===difficulty)return;
+  if(isGuest()||button.dataset.difficulty===difficulty)return;
   difficulty=button.dataset.difficulty;
   try{localStorage.setItem(`case-drop-${mode}-difficulty`,difficulty);}catch{}
   reset();
@@ -865,6 +966,8 @@ function merged(e) {
   checkMission(e.tier);
 }
 function reset(advance = false) {
+  if(isGuest())return;
+  coopRound++;coopTurn=0;
   advance=advance&&mode==='missions';
   if(!advance){
     secretTier=null;
@@ -878,7 +981,7 @@ function reset(advance = false) {
   world=new World(520,630,merged,{difficulty,secretTier,...(mission?{mission,onMystery:mysteryChanged,mysteryRewards:mission.mysteryRewards}:{})});
   world.score=score;world.merges=merges;world.seedCases();
   for(const body of world.bodies)if(!body.mystery)discovered.add(body.tier);
-  highest=Math.max(...discovered);current=randomTier();next=randomTier();cooldown=0;particles=[];floaters=[];bursts=[];won=false;aim=260;aimSample=null;flick=0;victoryDelay=0;hudDirty=false;accumulator=0;playSeconds=0;
+  highest=Math.max(...discovered);current=randomTier();next=randomTier();cooldown=room?65:0;particles=[];floaters=[];bursts=[];won=false;aim=260;aimSample=null;flick=0;victoryDelay=0;hudDirty=false;accumulator=0;playSeconds=0;
   const mysteryHits=difficultySettings(difficulty).mysteryHits;
   $('mystery-count').textContent=`0 / ${mysteryHits}`;$('mystery-progress').max=mysteryHits;$('mystery-progress').value=0;
   $('mystery-hint').textContent='';
@@ -887,11 +990,11 @@ function reset(advance = false) {
   drop();
 }
 function drop() {
-  if(paused||browsingOnMobile()||document.hidden||world.over||cooldown>0||missionComplete)return;
-  const body=world.add(current,aim,48);
-  if(aimSample&&performance.now()-aimSample.time<120){body.vx=flick;body.omega=flick/body.r;}
-  flick=0;aimSample=null;
-  highest=Math.max(highest,current);current=next;next=randomTier();cooldown=38;renderNext();updateArsenal();soundEffect();
+  if(isGuest()||coopBlocked()||paused||browsingOnMobile()||document.hidden||world.over||cooldown>0||missionComplete)return;
+  const body=world.add(current,dropAim(),48);
+  if((!room||coopTurn%2===0)&&aimSample&&performance.now()-aimSample.time<120){body.vx=flick;body.omega=flick/body.r;}
+  flick=0;aimSample=null;if(room)coopTurn++;
+  highest=Math.max(highest,current);current=next;next=randomTier();cooldown=room?65:38;renderNext();updateArsenal();soundEffect();
 }
 function secretBounds() {
   const viewport=window.visualViewport,button=$('golden-secret');
@@ -956,7 +1059,7 @@ function secretSkins(selectedTier) {
 $('secret-weapon').addEventListener('change',()=>secretSkins());
 $('secret-skin').addEventListener('change',previewSecret);
 $('golden-secret').addEventListener('click',()=>{
-  if(world.over||modal==='win'||$('secret-picker').open)return;
+  if(room||world.over||modal==='win'||$('secret-picker').open)return;
   const tier=secretTier??goldenKarambit;
   $('secret-weapon').value=String(LEVELS[tier].weaponTier);secretSkins(tier);
   secretWasPaused=paused;paused=true;needsDraw=true;
@@ -1009,11 +1112,11 @@ function showModal(type) {
   $('modal-action').focus({preventScroll:true});
 }
 function closeModal(){paused=false;modal='';needsDraw=true;$('overlay').hidden=true;canvas.focus({preventScroll:true});}
-$('restart').addEventListener('click',()=>{if(world.bodies.length||world.score)showModal('restart');else reset();});
-$('pause').addEventListener('click',()=>{if(!modal&&!world.over)showModal('pause');});
-$('modal-action').addEventListener('click',()=>{if(modal==='level')reset(true);else if(['over','restart','win'].includes(modal))reset();else closeModal();});
-$('modal-cancel').addEventListener('click',closeModal);
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&['restart','pause'].includes(modal)&&!$('secret-picker').open)closeModal();});
+$('restart').addEventListener('click',()=>{if(isGuest())return;if(world.bodies.length||world.score)showModal('restart');else reset();});
+$('pause').addEventListener('click',()=>{if(isGuest()){room.send({type:'pause'});return;}if(!modal&&!world.over)showModal('pause');});
+$('modal-action').addEventListener('click',()=>{if(isGuest()){if(modal==='pause')room.send({type:'resume'});return;}if(modal==='level')reset(true);else if(['over','restart','win'].includes(modal))reset();else closeModal();});
+$('modal-cancel').addEventListener('click',()=>{if(!isGuest())closeModal();});
+document.addEventListener('keydown',e=>{if(!isGuest()&&e.key==='Escape'&&['restart','pause'].includes(modal)&&!$('secret-picker').open)closeModal();});
 
 function draw() {
   ctx.clearRect(0,0,520,630);
@@ -1021,7 +1124,7 @@ function draw() {
   ctx.strokeStyle=danger?'#e87762':'#9c635b60';ctx.lineWidth=danger?2:1;ctx.setLineDash([5,7]);ctx.beginPath();ctx.moveTo(9,112);ctx.lineTo(511,112);ctx.stroke();ctx.setLineDash([]);
   if(danger){ctx.fillStyle=`rgba(224,89,65,${.04+Math.sin(performance.now()/140)*.02})`;ctx.fillRect(0,100,520,85);}
   ctx.strokeStyle='#596a4940';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(8,610);ctx.lineTo(8,622);ctx.lineTo(23,622);ctx.moveTo(497,622);ctx.lineTo(512,622);ctx.lineTo(512,610);ctx.stroke();
-  const r=world.radius(current),x=Math.max(r+8,Math.min(512-r,aim));
+  const r=world.radius(current),x=Math.max(r+8,Math.min(512-r,dropAim()));
   if(!world.over) {
     let landing=622-r;
     for(const b of world.bodies){const dx=b.x-x;if(Math.abs(dx)<r+b.r){const hit=b.y-Math.sqrt((r+b.r)**2-dx**2);if(hit>48)landing=Math.min(landing,hit);}}
@@ -1062,7 +1165,7 @@ function draw() {
   for(const f of floaters){ctx.globalAlpha=Math.max(0,f.life);ctx.fillStyle=f.color;ctx.font='bold 20px monospace';ctx.textAlign='center';ctx.fillText(f.text,f.x,f.y);}ctx.globalAlpha=1;
   const limit=world.difficulty.dangerSeconds;
   const remaining=Math.max(0,limit-world.dangerTime/60);
-  const status=world.over?'РАУНД ЗАВЕРШЕНО':paused||browsingOnMobile()?'ПАУЗА':danger?`ОБЕРЕЖНО! ${remaining.toFixed(1).replace('.',',')} с`:'ГРА ТРИВАЄ';
+  const status=world.over?'РАУНД ЗАВЕРШЕНО':paused||coopBlocked()||browsingOnMobile()?'ПАУЗА':danger?`ОБЕРЕЖНО! ${remaining.toFixed(1).replace('.',',')} с`:'ГРА ТРИВАЄ';
   if($('status').textContent!==status)$('status').textContent=status;
   if($('status').dataset.danger!==String(danger)){
     $('status').dataset.danger=String(danger);$('status').style.color=danger?'#ff8a76':'#e8eede';
@@ -1103,7 +1206,7 @@ function updateClocks(force = false) {
 setInterval(()=>updateClocks(false),500);
 function frame(now) {
   const elapsed=Math.min(now-previous,50);previous=now;
-  if(!paused&&!browsingOnMobile()&&!document.hidden){
+  if(!isGuest()&&!coopBlocked()&&!paused&&!browsingOnMobile()&&!document.hidden){
     playSeconds+=elapsed/1000;
     accumulator+=elapsed;
     while(accumulator>=1000/60){
@@ -1125,6 +1228,129 @@ function frame(now) {
   if(needsDraw&&!document.hidden){draw();needsDraw=false;}
   requestAnimationFrame(frame);
 }
+function roomControls() {
+  const active=!!room||roomLoading;
+  $('room-setup').hidden=active;$('room-session').hidden=!active;
+  $('room-create').disabled=roomLoading;$('room-copy').disabled=roomLoading||room?.closed;
+  $('golden-secret').hidden=active;$('restart').disabled=isGuest();
+  document.querySelectorAll('[data-mode],[data-difficulty]').forEach(button=>button.disabled=isGuest());
+  $('coop-turn').hidden=!active;
+  $('room-code-display').textContent=room?.code??'';
+  const link=new URL(location.href);link.hash=`room=${room?.code??''}`;
+  $('room-link').value=room&&!room.closed?link.href:'';
+  $('room-badge').textContent=room?.connected?'2 / 2':active?'1 / 2':'Соло';
+  $('modal-action').disabled=isGuest()&&modal!=='pause';
+  $('modal-cancel').hidden=isGuest()||modal!=='restart';
+}
+function roomStatus(state,message) {
+  if(state==='error'&&room)closeModal();
+  $('room-status').dataset.state=state;$('room-status').textContent=message;
+  needsDraw=true;roomControls();
+}
+function updateCoopTurn() {
+  if(!room)return;
+  const mine=coopTurn%2===(isGuest()?1:0);
+  const text=!room.connected?'Очікуємо підключення друга…':coopBlocked()?'Чекаємо друга — нехай повернеться до поля':paused?'Спільна пауза':mine?'Твій хід · спрямовуй наступний кейс':'Хід друга · готуй наступний кидок';
+  $('coop-turn').textContent=room.closed?'Зв’язок втрачено · вийди в соло, щоб створити нову кімнату':text;
+  $('coop-turn').dataset.mine=String(mine);
+}
+function snapshot() {
+  return {type:'state',protocol:ROOM_PROTOCOL,round:coopRound,mode,difficulty,missions,missionIndex,missionComplete,
+    bodies:world.bodies,score:world.score,merges:world.merges,dangerTime:world.dangerTime,over:world.over,minimumTier:world.minimumTier,
+    current,next,highest,discovered:[...discovered],playSeconds,cooldown,aim:dropAim(),turn:coopTurn,paused,modal,
+    blocked:document.hidden||browsingOnMobile()||coopBlocked()};
+}
+function receiveCoop(data) {
+  if(!room?.connected)return;
+  if(!isGuest()){
+    const input=playerInput(data);
+    if(input){remoteAim=input.aim;remoteActive=input.active;remoteInputAt=Date.now();needsDraw=true;}
+    if(data.type==='pause'&&!modal&&!world.over)showModal('pause');
+    if(data.type==='resume'&&modal==='pause')closeModal();
+    return;
+  }
+  if(!validSnapshot(data,LEVELS.length))return;
+  const changed=coopRound!==data.round||mode!==data.mode||difficulty!==data.difficulty;
+  const progressChanged=changed||highest!==data.highest||world.merges!==data.merges;
+  mode=data.mode;difficulty=data.difficulty;missions=data.missions;missionIndex=data.missionIndex;missionComplete=data.missionComplete;
+  if(changed){world=new World(520,630,()=>{},{difficulty,...(activeMission()?{mission:activeMission()}:{})});particles=[];bursts=[];floaters=[];}
+  Object.assign(world,{bodies:data.bodies,score:data.score,merges:data.merges,dangerTime:data.dangerTime,over:data.over,minimumTier:data.minimumTier});
+  current=data.current;next=data.next;highest=data.highest;discovered=new Set(data.discovered);playSeconds=data.playSeconds;cooldown=data.cooldown;
+  coopRound=data.round;coopTurn=data.turn;remoteAim=data.aim;hostBlocked=data.blocked;
+  if(changed)updateMode();
+  updateScore();renderNext();updateMission();
+  if(progressChanged)updateArsenal(changed);
+  const chest=world.bodies.find(b=>b.mystery),required=activeMission()?.mysteryHits??30;
+  $('mystery-progress').max=required;$('mystery-progress').value=chest?.hits??required;
+  $('mystery-count').textContent=chest?`${chest.hits} / ${required}`:'ВІДКРИТО';
+  $('mystery-hint').textContent='';
+  if(data.modal!==modal){if(data.modal)showModal(data.modal);else closeModal();}
+  paused=data.paused;
+  $('modal-action').disabled=modal!=='pause';
+  $('modal-cancel').hidden=true;
+  if(modal&&modal!=='pause')$('modal-action').textContent='Очікуємо рішення власника кімнати';
+  needsDraw=true;
+}
+let peerScriptPromise=null,roomAttempt=0;
+function loadPeerScript() {
+  if(window.Peer)return Promise.resolve(window.Peer);
+  if(peerScriptPromise)return peerScriptPromise;
+  peerScriptPromise=new Promise((resolve,reject)=>{
+    const script=document.createElement('script');script.src='peerjs.min.js?v=1.5.5';
+    const timeout=setTimeout(()=>fail(),15000);
+    const fail=()=>{clearTimeout(timeout);script.remove();peerScriptPromise=null;reject(new Error('Не вдалося завантажити мультиплеєр. Перевір інтернет і спробуй ще раз.'));};
+    script.onload=()=>{clearTimeout(timeout);window.Peer?resolve(window.Peer):fail();};script.onerror=fail;
+    document.head.append(script);
+  });
+  return peerScriptPromise;
+}
+async function startRoom(role,code) {
+  if(room||roomLoading)return;
+  const attempt=++roomAttempt;roomLoading=true;paused=true;
+  if($('secret-picker').open)$('secret-picker').close();
+  closeModal();paused=true;
+  roomStatus('connecting','З’єднуємося…');
+  try{
+    const Peer=await loadPeerScript();if(attempt!==roomAttempt)return;
+    room=new CoopRoom({Peer,role,code,onStatus:roomStatus,onData:receiveCoop,onConnect:()=>{
+      remoteActive=false;remoteInputAt=0;hostBlocked=true;
+      if(role==='host'){reset();room.send(snapshot());}else{coopRound=-1;}
+      roomControls();canvas.scrollIntoView({block:'center',behavior:reducedMotion?'instant':'smooth'});
+    }});
+    roomLoading=false;roomControls();
+  }catch(error){if(attempt!==roomAttempt)return;roomLoading=false;room=null;reset();roomStatus('error',error.message);}
+}
+$('room-create').addEventListener('click',()=>startRoom('host',newRoomCode()));
+$('room-join-form').addEventListener('submit',event=>{
+  event.preventDefault();const code=roomCode($('room-code').value);
+  if(!code){roomStatus('error','Введи код із 12 символів або повне посилання-запрошення.');$('room-code').focus();return;}
+  startRoom('guest',code);
+});
+$('room-leave').addEventListener('click',()=>{
+  roomAttempt++;room?.close();room=null;roomLoading=false;remoteActive=false;hostBlocked=false;
+  if(location.hash.startsWith('#room='))history.replaceState(null,'',location.pathname+location.search);
+  reset();roomControls();roomStatus('solo','Ти в соло. Можеш створити нову кімнату або приєднатися до друга.');
+});
+$('room-copy').addEventListener('click',async()=>{
+  try{await navigator.clipboard.writeText($('room-link').value);roomStatus('shared','Посилання скопійовано. Надішли його другу.');}
+  catch{$('room-link').focus();$('room-link').select();roomStatus('shared','Скопіюй виділене посилання й надішли другу.');}
+});
+function networkTick() {
+  if(room)needsDraw=true;
+  if(room?.connected){
+    if(isGuest())room.send({type:'input',aim,active:!document.hidden&&!browsingOnMobile()});
+    else room.send(snapshot());
+  }
+  updateCoopTurn();
+}
+setInterval(networkTick,100);
+document.addEventListener('visibilitychange',networkTick);
+window.addEventListener('pagehide',()=>room?.close());
 reset();requestAnimationFrame(frame);
+function readInvitation() {
+  const invitation=roomCode(location.hash.slice(1).replace(/^room=/,''));
+  if(invitation&&!room&&!roomLoading){$('room-code').value=invitation;paused=true;roomStatus('invited','Тебе запросили до кімнати. Натисни «Приєднатися», щоб грати вдвох.');}
+}
+window.addEventListener('hashchange',readInvitation);readInvitation();
 
 })();
