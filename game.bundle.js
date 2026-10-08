@@ -741,7 +741,7 @@ let sound = false, audio;
 let room = null, roomLoading = false, coopTurn = 0, coopRound = 0, remoteAim = 260, remoteActive = false, remoteInputAt = 0, hostBlocked = false;
 const isGuest = () => room?.role === 'guest';
 const coopBlocked = () => !!room && (!room.connected || (isGuest() ? hostBlocked : !remoteActive || Date.now()-remoteInputAt>2500));
-const dropAim = () => room ? (isGuest() || coopTurn%2 ? remoteAim : aim) : aim;
+const dropAim = () => Math.max(9,Math.min(511,room ? (isGuest() || coopTurn%2 ? remoteAim : aim) : aim));
 let bursts = [], aimSample = null, flick = 0, victoryDelay = 0;
 let missions = [], missionIndex = 0, missionComplete = false, discovered = new Set();
 let hudDirty = false, needsDraw = true;
@@ -1236,7 +1236,7 @@ function roomControls() {
   document.querySelectorAll('[data-mode],[data-difficulty]').forEach(button=>button.disabled=isGuest());
   $('coop-turn').hidden=!active;
   $('room-code-display').textContent=room?.code??'';
-  const link=new URL(location.href);link.hash=`room=${room?.code??''}`;
+  const link=new URL(location.protocol==='file:'?'https://gladkyimykhailo.github.io/CASE-DROP/':location.href);link.hash=`room=${room?.code??''}`;
   $('room-link').value=room&&!room.closed?link.href:'';
   $('room-badge').textContent=room?.connected?'2 / 2':active?'1 / 2':'Соло';
   $('modal-action').disabled=isGuest()&&modal!=='pause';
